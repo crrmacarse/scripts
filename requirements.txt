@@ -3,6 +3,9 @@ python-dotenv
 # get-coordinates
 googlemaps
 
+# analyze_money_manager
+openpyxl
+
 # cc-analyzer
 gspread
 oauth2client

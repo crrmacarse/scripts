@@ -14,6 +14,13 @@ pip3 install -r requirements.txt
 python3 start.py
 ```
 
+## Analyze Money Manager
+
+```sh
+# pass an exported xlsx file from money manager
+python3 analyze_money_manager.py
+```
+
 ## CC Analyzer
 
 ### Prerequisites
