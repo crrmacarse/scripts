@@ -31,6 +31,7 @@ def analyze_money_manager(file_path):
     # special cases
     total_shopee_count = 0
     total_lazada_count = 0
+    total_amazon_count = 0
     total_grab_count = 0
     total_711 = 0
 
@@ -90,6 +91,10 @@ def analyze_money_manager(file_path):
                     if re.search(r'Lazada$', note_value, re.IGNORECASE):
                         total_lazada_count += 1
 
+                    # catch amazon orders
+                    if re.search(r'Amazon$', note_value, re.IGNORECASE):
+                        total_amazon_count += 1
+
                     # catch 711 orders
                     if re.search(r'^711', note_value, re.IGNORECASE):
                         total_711 += 1
@@ -141,6 +146,7 @@ def analyze_money_manager(file_path):
     print("\nSPECIAL CASES")
     print(f"Total Shopee Order Count: {total_shopee_count}")
     print(f"Total Lazada Order Count: {total_lazada_count}")
+    print(f"Total Amazon Order Count: {total_amazon_count}")
     print(f"Total Grab(GrabFood and GrabCar) Count: {total_grab_count}")
     print(f"Total 711 Count: {total_711}")
 
