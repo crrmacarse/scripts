@@ -1,4 +1,0 @@
-gspread
-oauth2client
-PyPDF2
-gspread-formatting

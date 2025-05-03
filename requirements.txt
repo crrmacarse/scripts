@@ -1,0 +1,10 @@
+python-dotenv
+
+# get-coordinates
+googlemaps
+
+# cc-analyzer
+gspread
+oauth2client
+PyPDF2
+gspread-formatting
