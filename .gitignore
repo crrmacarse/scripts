@@ -2,3 +2,4 @@ dump
 google-service-account.json
 examples.MD
 .DS_Store
+.env
