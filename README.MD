@@ -2,6 +2,12 @@
 
 Making my life easier, one script at a time.
 
+### Install Dependencies
+
+```sh
+pip3 install -r requirements.txt
+```
+
 ## CC Analyzer
 
 ### Prerequisites
@@ -11,19 +17,25 @@ Making my life easier, one script at a time.
 - Add Service Account's JSON file as `google-service-account.json` in the root
 - Download PDF file of your CC bill
 
-### Install Dependencies
-
-```
-pip install -r requirements.txt
-```
-
 ### Running the app
 
-```
+```sh
 python3 cc-analyzer/main.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMMM YYYYY" --pdf-path "pdf/path" --pdf-password "pdf_password" 
 ```
 
 > Supported Credit Card: Security Bank
+
+## Get Coordinates
+
+```sh
+python3 get-coordinates.py --location "LOCATION"
+```
+
+## Is Weather Good Here?
+
+```sh
+python3 is-weather-good-here.py --location "LOCATION"
+```
 
 #### Get in touch
 
