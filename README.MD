@@ -1,11 +1,17 @@
-# Scripts 
+# Scripts
 
 Making my life easier, one script at a time.
 
-### Install Dependencies
+## Install Dependencies
 
 ```sh
 pip3 install -r requirements.txt
+```
+
+## Running the scripts via GUI
+
+```sh
+python3 start.py
 ```
 
 ## CC Analyzer
