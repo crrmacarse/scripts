@@ -49,7 +49,7 @@ for page in reader.pages:
 
 # Google Sheets API setup
 scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name("src/credentials.json", scope)
+creds = ServiceAccountCredentials.from_json_keyfile_name("google-service-account.json", scope)
 
 client = gspread.authorize(creds)
 sheet = client.open(sheet_name)

@@ -1,4 +1,4 @@
 dump
-cc-analyzer/credentials.json
+google-service-account.json
 examples.MD
 .DS_Store

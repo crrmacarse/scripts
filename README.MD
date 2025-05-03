@@ -6,10 +6,9 @@ Making my life easier, one script at a time.
 
 ### Prerequisites
 
-- Head over to `python` folder
 - Enable Google Sheets and Google Drive API in Google Cloud Console
 - Share targeted Google sheet file to Service account email as "Editor"
-- Add Service Account's JSON file as `credentials.json` under `src` folder
+- Add Service Account's JSON file as `google-service-account.json` in the root
 - Download PDF file of your CC bill
 
 ### Install Dependencies
@@ -21,7 +20,7 @@ pip install -r requirements.txt
 ### Running the app
 
 ```
-python3 src/main.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMMM YYYYY" --pdf-path "pdf/path" --pdf-password "pdf_password" 
+python3 cc-analyzer/main.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMMM YYYYY" --pdf-path "pdf/path" --pdf-password "pdf_password" 
 ```
 
 > Supported Credit Card: Security Bank
