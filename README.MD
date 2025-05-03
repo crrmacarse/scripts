@@ -20,7 +20,7 @@ pip3 install -r requirements.txt
 ### Running the app
 
 ```sh
-python3 cc-analyzer/main.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMMM YYYYY" --pdf-path "pdf/path" --pdf-password "pdf_password" 
+python3 cc-analyzer.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMMM YYYYY" --pdf-path "pdf/path" --pdf-password "pdf_password" 
 ```
 
 > Supported Credit Card: Security Bank
