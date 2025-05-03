@@ -1,9 +1,9 @@
 from dotenv import load_dotenv
 import os
 import googlemaps
-import argparse
 import requests
 from pprint import pprint
+import time
 
 load_dotenv()
 
@@ -47,20 +47,15 @@ def get_weather(lat, lng):
         response.raise_for_status()
 
 if __name__ == "__main__":
-    # parse passed params
-    parser = argparse.ArgumentParser(description="Is weather good here?")
-    parser.add_argument("--location", required=True, help="Location to get weather data for")
-
-    args = parser.parse_args()
-
-    # load passed params to variables
-    location = args.location
+    location = input("Enter Location: ")
     
     try:
         coordinates = get_coordinates(location)
         weather_response = get_weather(coordinates['lat'], coordinates['lng'])
 
-        print(f"Weather forecast for {coordinates['complete_address']}")
+        print(f"Fetching weather data for {coordinates['complete_address']}... \n")
+        time.sleep(3)
+
         pprint(weather_response)
     except Exception as e:
         print(f"Error: {e}")

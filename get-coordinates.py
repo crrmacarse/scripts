@@ -1,7 +1,6 @@
 from dotenv import load_dotenv
 import os
 import googlemaps
-import argparse
 
 load_dotenv()
 
@@ -21,14 +20,7 @@ def get_coordinates(location):
         raise ValueError("No results found for the given location.")
 
 if __name__ == "__main__":
-    # parse passed params
-    parser = argparse.ArgumentParser(description="Get Coordinats")
-    parser.add_argument("--location", required=True, help="Location to get coordinates for")
-
-    args = parser.parse_args()
-
-    # load passed params to variables
-    location = args.location
+    location = input("Enter Location: ")
     
     try:
         coordinates = get_coordinates(location)

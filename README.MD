@@ -28,19 +28,19 @@ python3 cc-analyzer.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMM
 ## Get Coordinates
 
 ```sh
-python3 get-coordinates.py --location "LOCATION"
+python3 get-coordinates.py
 ```
 
 ## Is Weather Good Here?
 
 ```sh
-python3 is-weather-good-here.py --location "LOCATION"
+python3 is-weather-good-here.py
 ```
 
 ## Web Scraper
 
 ```sh
-python3 scraper.py --url "url"
+python3 scraper.py
 ```
 
 #### Get in touch
