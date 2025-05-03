@@ -11,3 +11,4 @@ gspread-formatting
 
 # scraper
 bs4
+lxml

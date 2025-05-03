@@ -37,6 +37,12 @@ python3 get-coordinates.py --location "LOCATION"
 python3 is-weather-good-here.py --location "LOCATION"
 ```
 
+## Web Scraper
+
+```sh
+python3 scraper.py --url "url"
+```
+
 #### Get in touch
 
 <p>

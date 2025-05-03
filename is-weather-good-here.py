@@ -63,4 +63,4 @@ if __name__ == "__main__":
         print(f"Weather forecast for {coordinates['complete_address']}")
         pprint(weather_response)
     except Exception as e:
-        print(f"Error fetching coordinates: {e}")
+        print(f"Error: {e}")

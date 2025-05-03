@@ -1,15 +1,30 @@
 import requests
 from pprint import pprint
 from bs4 import BeautifulSoup
+from utils.validators import is_valid_url  # Import the reusable validator
+import argparse
 
-url = 'https://cpu.edu.ph/'
-data = requests.get(url)
+def scrape(passed_url):
+     url = is_valid_url(passed_url)
 
-soup = BeautifulSoup(data.text, 'html.parser')
+     response = requests.get(url)
+     soup = BeautifulSoup(response.text, 'lxml')
 
-data = []
-divItem = soup.find('div', { 'class': 'grid-items' })
-for div in divItem.find_all('div', { 'class': 'title' }):
-     data.append(div.text)
+     return soup.prettify()
 
-pprint(data)
+if __name__ == "__main__":
+     # parse passed params
+     parser = argparse.ArgumentParser(description="Web Scraper")
+     parser.add_argument("--url", required=True, help="Website URL to scrape")
+
+     args = parser.parse_args()
+
+     # load passed params to variables
+     url = args.url
+
+     try:
+          scraped = scrape(url)
+
+          pprint(scraped)
+     except Exception as e:
+          print(f"Error: {e}")
