@@ -32,6 +32,7 @@ def analyze_money_manager(file_path):
     total_shopee_count = 0
     total_lazada_count = 0
     total_grab_count = 0
+    total_711 = 0
 
     for row in sheet.iter_rows(min_row=2):
         period_cell = row[period_index - 1]
@@ -89,6 +90,10 @@ def analyze_money_manager(file_path):
                     if re.search(r'Lazada$', note_value, re.IGNORECASE):
                         total_lazada_count += 1
 
+                    # catch 711 orders
+                    if re.search(r'^711', note_value, re.IGNORECASE):
+                        total_711 += 1
+
                     # catch grabfood and grabcar
                     if subcategory_value:
                         if re.search(r'Grab$', subcategory_value, re.IGNORECASE):
@@ -137,6 +142,7 @@ def analyze_money_manager(file_path):
     print(f"Total Shopee Order Count: {total_shopee_count}")
     print(f"Total Lazada Order Count: {total_lazada_count}")
     print(f"Total Grab(GrabFood and GrabCar) Count: {total_grab_count}")
+    print(f"Total 711 Count: {total_711}")
 
     # Top 10 Food
 
