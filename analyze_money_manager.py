@@ -4,6 +4,24 @@ from pprint import pprint
 from datetime import datetime
 from utils.helpers import write_to_file
 
+def process_coffee_shops(food_data):
+    coffee_shops = [
+        "Starbucks", "Dunkin Donuts", "Pickup Coffee", "Coffee Project",
+        "Tim Hortons", "Dean & Deluca", "Cafe Amazon", "Highlands", "Bo's"
+    ]
+    coffee_shops_iloilo = ["Coffeebreak", "Cafe Brewtherhood", "Teepee", "Tiring"]
+
+    # adjust depending your coffee shop config here
+    coffee_shops = coffee_shops + coffee_shops_iloilo
+    
+    food_data_coffee_shops_filtered = [
+        (name, data) for name, data in food_data.items() 
+        if data[3] and any(re.search(rf'\b{re.escape(coffee_shop)}\b', name, re.IGNORECASE) for coffee_shop in coffee_shops)
+    ]
+    top_10_coffee_shops = sorted(food_data_coffee_shops_filtered, key=lambda item: item[1][0], reverse=True)[:10]
+
+    return top_10_coffee_shops
+
 def analyze_money_manager(file_path):
     workbook = load_workbook(file_path)
     sheet = workbook.active
@@ -34,7 +52,9 @@ def analyze_money_manager(file_path):
     total_shopee_count = 0
     total_lazada_count = 0
     total_amazon_count = 0
-    total_grab_count = 0
+    total_grab_food_count = 0
+    total_grab_car_count = 0
+    total_foodpanda_count = 0
     total_711 = 0
 
     for row in sheet.iter_rows(min_row=2):
@@ -76,15 +96,25 @@ def analyze_money_manager(file_path):
                     purchase_from_data[note_value] = (current_count + 1, round(current_amount_total + amount_value, 2), current_period_value)
 
                     if category_value == "Food":
+                        # include Grab and Foodpanda for delivery
+                        is_coffee_shop = subcategory_value == "Cafe Hopping" or subcategory_value == "Grab" or subcategory_value == "Foodpanda"
+
                         if note_value not in food_data:
-                            food_data[note_value] = (0, 0, period_value.strftime("%B %d, %Y"))
-                        current_count, current_amount_total, current_period_value = food_data[note_value]
+                            food_data[note_value] = (0, 0, period_value.strftime("%B %d, %Y"), is_coffee_shop)
+                        current_count, current_amount_total, current_period_value, _ = food_data[note_value]
 
                         # check if current_period_value is older than period_value then update it
                         if datetime.strptime(current_period_value, "%B %d, %Y") > period_value:
                             current_period_value = period_value.strftime("%B %d, %Y")
-                        food_data[note_value] = (current_count + 1, round(current_amount_total + amount_value, 2), current_period_value)
+                        food_data[note_value] = (current_count + 1, round(current_amount_total + amount_value, 2), current_period_value, is_coffee_shop)
 
+                        # catch GrabFood
+                        if subcategory_value == "Grab":
+                            total_grab_food_count += 1
+                        
+                        # catch Foodpanda
+                        if subcategory_value == "Foodpanda":
+                            total_foodpanda_count += 1
                     # catch shopee orders
                     if re.search(r'Shopee$', note_value, re.IGNORECASE):
                         total_shopee_count += 1
@@ -101,10 +131,10 @@ def analyze_money_manager(file_path):
                     if re.search(r'^711', note_value, re.IGNORECASE):
                         total_711 += 1
 
-                    # catch grabfood and grabcar
-                    if subcategory_value:
-                        if re.search(r'Grab$', subcategory_value, re.IGNORECASE):
-                            total_grab_count += 1
+                    # catch grabcar and grabtaxi
+                    if category_value == "Transportation":
+                        if re.search(r'^Grab', note_value, re.IGNORECASE):
+                            total_grab_car_count += 1
                             
                 
             elif income_expense_value == "Income":
@@ -134,6 +164,8 @@ def analyze_money_manager(file_path):
     output.append(f"- Total Income Entry: {total_income_count}")
     output.append(f"- Total Expense Entry: {total_expense_count}")
 
+    # Most common category, subcategory
+
     output.append("\n## Expense Accounts")
     output.append("| Account | Number of Entries ↓ |")
     output.append("|-------------------|-------------------|")
@@ -148,6 +180,8 @@ def analyze_money_manager(file_path):
     for income_from, (count, total, first_instance) in top_10_income_from_data:
         output.append(f"| {income_from} | {count} | PHP {total:,.2f} | {first_instance} |")
 
+    # Top 5 Highest income earned with date
+
     output.append("\n## Top 30 Expense From")
     top_30_purchase_from_data = sorted(purchase_from_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
     output.append("| Expense from | Number of Entries ↓ | Total Amount | First Instance   |")
@@ -155,18 +189,48 @@ def analyze_money_manager(file_path):
     for purchase_from, (count, total, first_instance) in top_30_purchase_from_data:
         output.append(f"| {purchase_from} | {count} | PHP {total:,.2f} | {first_instance} |")
 
+    output.append("\n## Top 10 Expense From by Amount")
+    top_30_purchase_from_data = sorted(purchase_from_data.items(), key=lambda item: item[1][1], reverse=True)[:10]
+    output.append("| Expense from | Total Amount ↓ |")
+    output.append("|-------------------|-------------------|")
+    for purchase_from, (_, total, _) in top_30_purchase_from_data:
+        output.append(f"| {purchase_from} | PHP {total:,.2f} |")
+
+    # Top 10 Most expensive expense with date
+
     output.append("\n## Top 30 Food")
     top_30_food_data = sorted(food_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
     output.append("| Food Establishments | Number of Entries ↓ | Total Amount | First Instance |")
     output.append("|-------------------|-------------------|--------------|------------------|") 
-    for food_establishment, (count, total, first_instance) in top_30_food_data:
+    for food_establishment, (count, total, first_instance, _) in top_30_food_data:
         output.append(f"| {food_establishment} | {count} | PHP {total:,.2f} | {first_instance} |")
+
+    output.append("\n## Top 10 Fast Foods")
+    fast_foods = ["Jollibee", "Mcdo", "KFC", "Chowking", "Mang Inasal", "Burger King", "Pizza Hut"]
+    food_data_fast_foods_filtered = [
+        (name, data) for name, data in food_data.items() 
+        if any(re.search(rf'\b{re.escape(fast_food)}\b', name, re.IGNORECASE) for fast_food in fast_foods)
+    ]
+    top_10_fast_foods = sorted(food_data_fast_foods_filtered, key=lambda item: item[1][0], reverse=True)[:10]
+    output.append("| Fast Food | Number of Entries ↓ | Total Amount |")
+    output.append("|-------------------|-------------------|-------------------|")
+    for fast_food, (count, total, _, _) in top_10_fast_foods:
+        output.append(f"| {fast_food} | {count} | PHP {total:,.2f} |")
+
+    output.append("\n## Top 10 Coffee Shops")
+    top_10_coffee_shops = process_coffee_shops(food_data)
+    output.append("| Coffee Shop | Number of Entries ↓ | Total Amount |")
+    output.append("|-------------------|-------------------|-------------------|")
+    for coffee_shop, (count, total, _, _) in top_10_coffee_shops:
+        output.append(f"| {coffee_shop} | {count} | PHP {total:,.2f} |")
 
     output.append("\n## Special Cases")
     output.append(f"- Total Shopee Order Count: {total_shopee_count}")
     output.append(f"- Total Lazada Order Count: {total_lazada_count}")
     output.append(f"- Total Amazon Order Count: {total_amazon_count}")
-    output.append(f"- Total Grab(GrabFood and GrabCar) Count: {total_grab_count}")
+    output.append(f"- Total Foodpanda Count: {total_foodpanda_count}")
+    output.append(f"- Total GrabFood Count: {total_grab_food_count}")
+    output.append(f"- Total GrabCar Count: {total_grab_car_count}")
     output.append(f"- Total 711 Count: {total_711}")
 
     return output
