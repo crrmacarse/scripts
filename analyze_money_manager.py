@@ -1,7 +1,8 @@
 import re
 from openpyxl import load_workbook
 from pprint import pprint
-from datetime import datetime 
+from datetime import datetime
+from utils.helpers import write_to_file
 
 def analyze_money_manager(file_path):
     workbook = load_workbook(file_path)
@@ -17,6 +18,7 @@ def analyze_money_manager(file_path):
     income_expense_column_index = header_row.index("Income/Expense") + 1
     note_index = header_row.index("Note") + 1
 
+    # totals
     total_expense = 0
     total_expense_count = 0
     total_income = 0
@@ -120,42 +122,66 @@ def analyze_money_manager(file_path):
                         current_period_value = period_value.strftime("%B %d, %Y")
                     income_from_data[note_value] = (current_count + 1, round(current_amount_total + amount_value, 2), current_period_value)
 
-    print(f"Total Income: {total_income:,.2f}")
-    print(f"Total Expense: {total_expense:,.2f}")
+    output = []
+    output.append("# Money Manager Analysis")
+    output.append("@crrmacarse")
+
+    output.append("\n## Summary")
+    output.append(f"- Total Income: PHP {total_income:,.2f}")
+    output.append(f"- Total Expense: PHP {total_expense:,.2f}")
     balance = total_income - total_expense
-    print(f"Balance: {balance:,.2f}")
-    
-    print(f"\nTotal Income Entry: {total_income_count}")
-    print(f"Total Expense Entry: {total_expense_count}")
-    
-    print("\nExpense Accounts:")
-    pprint(sorted(expense_account_data.items(), key=lambda item: item[1], reverse=True))
+    output.append(f"- Balance: PHP {balance:,.2f}")
+    output.append(f"- Total Income Entry: {total_income_count}")
+    output.append(f"- Total Expense Entry: {total_expense_count}")
 
-    print("\nTop 10 Income From:")
-    top_30_income_from_data = sorted(income_from_data.items(), key=lambda item: item[1], reverse=True)[:10]
-    pprint(top_30_income_from_data)
+    output.append("\n## Expense Accounts")
+    output.append("| Account | Number of Entries ↓ |")
+    output.append("|-------------------|-------------------|")
+    sorted_expense_accounts = sorted(expense_account_data.items(), key=lambda item: item[1], reverse=True)
+    for account, count in sorted_expense_accounts:
+        output.append(f"| {account} | {count} |")
 
-    print("\nTop 30 Purchase From:")
-    top_30_purchase_from_data = sorted(purchase_from_data.items(), key=lambda item: item[1], reverse=True)[:30]
-    pprint(top_30_purchase_from_data)
+    output.append("\n## Top 10 Income From")
+    output.append("| Income from | Number of Entries | Total Amount ↓ | First Instance   |")
+    output.append("|-------------------|-------------------|--------------|------------------|")
+    top_10_income_from_data = sorted(income_from_data.items(), key=lambda item: item[1][1], reverse=True)[:10]
+    for income_from, (count, total, first_instance) in top_10_income_from_data:
+        output.append(f"| {income_from} | {count} | PHP {total:,.2f} | {first_instance} |")
 
-    print("\nTop 30 Food:")
-    top_30_food_data = sorted(food_data.items(), key=lambda item: item[1], reverse=True)[:30]
-    pprint(top_30_food_data)
+    output.append("\n## Top 30 Expense From")
+    top_30_purchase_from_data = sorted(purchase_from_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
+    output.append("| Expense from | Number of Entries ↓ | Total Amount | First Instance   |")
+    output.append("|-------------------|-------------------|--------------|------------------|")
+    for purchase_from, (count, total, first_instance) in top_30_purchase_from_data:
+        output.append(f"| {purchase_from} | {count} | PHP {total:,.2f} | {first_instance} |")
 
-    print("\nSPECIAL CASES")
-    print(f"Total Shopee Order Count: {total_shopee_count}")
-    print(f"Total Lazada Order Count: {total_lazada_count}")
-    print(f"Total Amazon Order Count: {total_amazon_count}")
-    print(f"Total Grab(GrabFood and GrabCar) Count: {total_grab_count}")
-    print(f"Total 711 Count: {total_711}")
+    output.append("\n## Top 30 Food")
+    top_30_food_data = sorted(food_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
+    output.append("| Food Establishments | Number of Entries ↓ | Total Amount | First Instance |")
+    output.append("|-------------------|-------------------|--------------|------------------|") 
+    for food_establishment, (count, total, first_instance) in top_30_food_data:
+        output.append(f"| {food_establishment} | {count} | PHP {total:,.2f} | {first_instance} |")
 
-    # Top 10 Food
+    output.append("\n## Special Cases")
+    output.append(f"- Total Shopee Order Count: {total_shopee_count}")
+    output.append(f"- Total Lazada Order Count: {total_lazada_count}")
+    output.append(f"- Total Amazon Order Count: {total_amazon_count}")
+    output.append(f"- Total Grab(GrabFood and GrabCar) Count: {total_grab_count}")
+    output.append(f"- Total 711 Count: {total_711}")
+
+    return output
 
 if __name__ == "__main__":
     try:
         # file_path = input("Enter the path to the .xlsx file: ")
+        output_file_path = input("Enter the path to the output .md file (default: dump/output.md): ") or "dump/output.md"
+
+        # TMP ONLY
         file_path = "./dump/mm.xlsx"
-        analyze_money_manager(file_path)
+
+        result = analyze_money_manager(file_path)
+
+        print("\n".join(result))
+        write_to_file(output_file_path, "\n".join(result))
     except Exception as e:
         print(f"Error: {e}")
