@@ -14,6 +14,7 @@ def process_coffee_shops(food_data):
     # adjust depending your coffee shop config here
     coffee_shops = coffee_shops + coffee_shops_iloilo
     
+    # filter food_data that matches coffee_shops and is_coffee_shop to true
     food_data_coffee_shops_filtered = [
         (name, data) for name, data in food_data.items() 
         if data[3] and any(re.search(rf'\b{re.escape(coffee_shop)}\b', name, re.IGNORECASE) for coffee_shop in coffee_shops)
@@ -21,6 +22,18 @@ def process_coffee_shops(food_data):
     top_10_coffee_shops = sorted(food_data_coffee_shops_filtered, key=lambda item: item[1][0], reverse=True)[:10]
 
     return top_10_coffee_shops
+
+def process_fast_foods(food_data):
+    fast_foods = ["Jollibee", "Mcdo", "KFC", "Chowking", "Mang Inasal", "Burger King", "Pizza Hut"]
+    
+    # filter food_data that matches fast_foods
+    food_data_fast_foods_filtered = [
+        (name, data) for name, data in food_data.items() 
+        if any(re.search(rf'\b{re.escape(fast_food)}\b', name, re.IGNORECASE) for fast_food in fast_foods)
+    ]
+    top_10_fast_foods = sorted(food_data_fast_foods_filtered, key=lambda item: item[1][0], reverse=True)[:10]
+
+    return top_10_fast_foods
 
 def analyze_money_manager(file_path):
     workbook = load_workbook(file_path)
@@ -47,6 +60,7 @@ def analyze_money_manager(file_path):
     income_from_data = {}
     purchase_from_data = {}
     food_data = {}
+    grocery_data = {}
 
     # special cases
     total_shopee_count = 0
@@ -115,6 +129,21 @@ def analyze_money_manager(file_path):
                         # catch Foodpanda
                         if subcategory_value == "Foodpanda":
                             total_foodpanda_count += 1
+                    
+                    elif category_value == "Grocery":
+                        if note_value not in grocery_data:
+                            grocery_data[note_value] = (0, 0, period_value.strftime("%B %d, %Y"))
+                        current_count, current_amount_total, current_period_value = grocery_data[note_value]
+                        # check if current_period_value is older than period_value then update it
+                        if datetime.strptime(current_period_value, "%B %d, %Y") > period_value:
+                            current_period_value = period_value.strftime("%B %d, %Y")
+                        grocery_data[note_value] = (current_count + 1, round(current_amount_total + amount_value, 2), current_period_value)
+
+                    elif category_value == "Transportation":
+                        # catch grabcar and grabtaxi
+                        if re.search(r'^Grab', note_value, re.IGNORECASE):
+                            total_grab_car_count += 1
+                        
                     # catch shopee orders
                     if re.search(r'Shopee$', note_value, re.IGNORECASE):
                         total_shopee_count += 1
@@ -130,11 +159,6 @@ def analyze_money_manager(file_path):
                     # catch 711 orders
                     if re.search(r'^711', note_value, re.IGNORECASE):
                         total_711 += 1
-
-                    # catch grabcar and grabtaxi
-                    if category_value == "Transportation":
-                        if re.search(r'^Grab', note_value, re.IGNORECASE):
-                            total_grab_car_count += 1
                             
                 
             elif income_expense_value == "Income":
@@ -198,6 +222,20 @@ def analyze_money_manager(file_path):
 
     # Top 10 Most expensive expense with date
 
+    output.append("\n## Top 10 Grocery Store")
+    output.append("| Grocery | Number of Entries ↓ | Total Amount | First Instance   |")
+    output.append("|-------------------|-------------------|--------------|------------------|")
+    top_10_grocery_data = sorted(grocery_data.items(), key=lambda item: item[1][0], reverse=True)[:10]
+    for grocery, (count, total, first_instance) in top_10_grocery_data:
+        output.append(f"| {grocery} | {count} | PHP {total:,.2f} | {first_instance} |")
+
+    output.append("\n## Top 10 Grocery Store by Amount")
+    top_10_grocery_data = sorted(grocery_data.items(), key=lambda item: item[1][1], reverse=True)[:10]
+    output.append("| Grocery | Total Amount ↓ |")
+    output.append("|-------------------|-------------------|")
+    for grocery, (_, total, _) in top_10_grocery_data:
+        output.append(f"| {grocery} | PHP {total:,.2f} |")
+
     output.append("\n## Top 30 Food")
     top_30_food_data = sorted(food_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
     output.append("| Food Establishments | Number of Entries ↓ | Total Amount | First Instance |")
@@ -206,12 +244,7 @@ def analyze_money_manager(file_path):
         output.append(f"| {food_establishment} | {count} | PHP {total:,.2f} | {first_instance} |")
 
     output.append("\n## Top 10 Fast Foods")
-    fast_foods = ["Jollibee", "Mcdo", "KFC", "Chowking", "Mang Inasal", "Burger King", "Pizza Hut"]
-    food_data_fast_foods_filtered = [
-        (name, data) for name, data in food_data.items() 
-        if any(re.search(rf'\b{re.escape(fast_food)}\b', name, re.IGNORECASE) for fast_food in fast_foods)
-    ]
-    top_10_fast_foods = sorted(food_data_fast_foods_filtered, key=lambda item: item[1][0], reverse=True)[:10]
+    top_10_fast_foods = process_fast_foods(food_data)
     output.append("| Fast Food | Number of Entries ↓ | Total Amount |")
     output.append("|-------------------|-------------------|-------------------|")
     for fast_food, (count, total, _, _) in top_10_fast_foods:
@@ -237,15 +270,12 @@ def analyze_money_manager(file_path):
 
 if __name__ == "__main__":
     try:
-        # file_path = input("Enter the path to the .xlsx file: ")
+        # temporarily added a default file path
+        file_path = input("Enter the path to the .xlsx file: ") or "./dump/mm.xlsx"
         output_file_path = input("Enter the path to the output .md file (default: dump/output.md): ") or "dump/output.md"
-
-        # TMP ONLY
-        file_path = "./dump/mm.xlsx"
 
         result = analyze_money_manager(file_path)
 
-        print("\n".join(result))
         write_to_file(output_file_path, "\n".join(result))
     except Exception as e:
         print(f"Error: {e}")
