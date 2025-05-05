@@ -24,11 +24,18 @@ pip3 install -r requirements.txt
 
 ## Running the scripts via GUI
 
+Start as an app instead of typing in the cli!
+
 ```sh
 python3 start.py
 ```
 
 ## Analyze Money Manager
+
+A set of reports to further visualize your Money Manager data. 
+
+> Money Manager is a financial app available
+on App store and Play store.
 
 ```sh
 # pass an exported xlsx file from money manager app
@@ -36,6 +43,8 @@ python3 analyze_money_manager.py
 ```
 
 ## CC Analyzer
+
+Analyzes Credit Card bill sent by your banks in your email. Currently supports Security Bank.
 
 ### Prerequisites
 
@@ -53,6 +62,8 @@ python3 cc-analyzer.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMM
 > Supported Credit Card: Security Bank
 
 ## Set Slack status
+
+Updates Slack status remotely. This could be use in conjunction with CRON to automate "Lunch Break"
 
 ### Prerequisites
 
@@ -77,17 +88,23 @@ python3 slack_status.py --template "TEMPLATE"
 
 ## Get Coordinates
 
+Get lat and lng of given location
+
 ```sh
 python3 get-coordinates.py
 ```
 
 ## Is Weather Good Here?
 
+Checks weather in a given location
+
 ```sh
 python3 is-weather-good-here.py
 ```
 
 ## Web Scraper
+
+Scrapes a website
 
 ```sh
 python3 scraper.py
