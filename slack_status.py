@@ -1,4 +1,5 @@
 import os
+import time
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 from dotenv import load_dotenv
@@ -16,9 +17,9 @@ def set_slack_status(status_text, status_emoji, status_expiration=0):
 
         client.users_profile_set(
             profile={
-                "status_text": status_text,
-                "status_emoji": status_emoji,
-                "status_expiration": status_expiration
+            "status_text": status_text,
+            "status_emoji": status_emoji,
+            "status_expiration": int(time.time()) + status_expiration if status_expiration > 0 else 0
             }
         )
         print("Status updated successfully.")
