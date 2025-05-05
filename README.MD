@@ -38,6 +38,18 @@ python3 cc-analyzer.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMM
 
 > Supported Credit Card: Security Bank
 
+## Set Slack status
+
+```sh
+# or leave template blank to input status manually
+python3 slack_status.py --template "TEMPLATE"     
+```
+
+```sh
+# cron configuration to run every 12nn at Monday to Friday the slack status for Lunch
+0 12 * * 1-5 /usr/bin/python3 /path/to/slack_status.py --template "Lunch"
+```
+
 ## Get Coordinates
 
 ```sh
