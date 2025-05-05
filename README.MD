@@ -1,8 +1,22 @@
-# Scripts
+# Scripts, Apps, and Tools
 
 Making my life easier, one script at a time.
 
-## Install Dependencies
+## Setting up
+
+### Utilizing venv
+
+This allows a python project to run separately from root
+
+```sh
+# initialize venv
+python3 -m venv venv 
+
+# activate venv
+source venv/bin/activate
+```
+
+### Install Dependencies
 
 ```sh
 pip3 install -r requirements.txt
@@ -17,7 +31,7 @@ python3 start.py
 ## Analyze Money Manager
 
 ```sh
-# pass an exported xlsx file from money manager
+# pass an exported xlsx file from money manager app
 python3 analyze_money_manager.py
 ```
 
@@ -40,13 +54,24 @@ python3 cc-analyzer.py --sheet-name "NAME_OF_GOOGLE_SHEET" --billing-period "MMM
 
 ## Set Slack status
 
+### Prerequisites
+
+- Secure Slack OATH token in https://api.slack.com/apps
+- Add User Token Scopes of `users.profile:write`
+- Install the App
+- Copy the OAuth token to `SLACK_OATH_TOKEN` inside `.env` file
+
+### Running the App
+
 ```sh
 # or leave template blank to input status manually
 python3 slack_status.py --template "TEMPLATE"     
 ```
 
+### Adding to CRON
+
 ```sh
-# cron configuration to run every 12nn at Monday to Friday the slack status for Lunch
+# Run every 12nn at Monday to Friday the slack status for Lunch
 0 12 * * 1-5 /usr/bin/python3 /path/to/slack_status.py --template "Lunch"
 ```
 
