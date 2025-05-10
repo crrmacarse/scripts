@@ -1,6 +1,5 @@
 import re
 from openpyxl import load_workbook
-from pprint import pprint
 from datetime import datetime
 from utils.helpers import write_to_file
 
@@ -48,6 +47,7 @@ def analyze_money_manager(file_path):
     amount_index = header_row.index("Amount") + 1
     income_expense_column_index = header_row.index("Income/Expense") + 1
     note_index = header_row.index("Note") + 1
+    description_index = header_row.index("Description") + 1
 
     # totals
     total_expense = 0
@@ -64,12 +64,19 @@ def analyze_money_manager(file_path):
 
     # special cases
     total_shopee_count = 0
+    shopee_orders = []
     total_lazada_count = 0
+    lazada_orders = []
     total_amazon_count = 0
+    amazon_orders = []
     total_grab_food_count = 0
     total_grab_car_count = 0
     total_foodpanda_count = 0
     total_711 = 0
+    total_christian_solo_expense_count = 0
+    total_christian_solo_amount = 0
+    total_shane_solo_expense_count = 0
+    total_shane_solo_amount = 0
 
     for row in sheet.iter_rows(min_row=2):
         period_cell = row[period_index - 1]
@@ -79,6 +86,7 @@ def analyze_money_manager(file_path):
         amount_cell = row[amount_index - 1]
         income_expense_cell = row[income_expense_column_index - 1]
         note_cell = row[note_index - 1]
+        description_cell = row[description_index - 1]
 
         # get the values from the cells
         period_value = period_cell.value
@@ -88,6 +96,7 @@ def analyze_money_manager(file_path):
         income_expense_value = income_expense_cell.value
         account_value = account_cell.value
         note_value = note_cell.value
+        description_value = description_cell.value
 
         if isinstance(amount_value, (int, float)):
             if income_expense_value == "Exp.":
@@ -143,23 +152,45 @@ def analyze_money_manager(file_path):
                         # catch grabcar and grabtaxi
                         if re.search(r'^Grab', note_value, re.IGNORECASE):
                             total_grab_car_count += 1
-                        
+
                     # catch shopee orders
                     if re.search(r'Shopee$', note_value, re.IGNORECASE):
                         total_shopee_count += 1
+                        if description_value:
+                            ordered_item = re.sub(r'@Christian|@Shane', '', description_value).strip()
+                            if ordered_item:
+                                shopee_orders.append(ordered_item)
 
                     # catch lazada orders
                     if re.search(r'Lazada$', note_value, re.IGNORECASE):
                         total_lazada_count += 1
+                        if description_value:
+                            ordered_item = re.sub(r'@Christian|@Shane', '', description_value).strip()
+                            if ordered_item:
+                                lazada_orders.append(ordered_item)
+
 
                     # catch amazon orders
                     if re.search(r'Amazon$', note_value, re.IGNORECASE):
                         total_amazon_count += 1
+                        if description_value:
+                            ordered_item = re.sub(r'@Christian|@Shane', '', description_value).strip()
+                            if ordered_item:
+                                amazon_orders.append(ordered_item)
 
                     # catch 711 orders
                     if re.search(r'^711', note_value, re.IGNORECASE):
                         total_711 += 1
+
+                    if description_value:
+                        # catch @Christian and @Shane tagged expenses
+                        if re.search(r'@Christian', description_value, re.IGNORECASE):
+                            total_christian_solo_expense_count += 1
+                            total_christian_solo_amount += amount_value
                             
+                        if re.search(r'@Shane', description_value, re.IGNORECASE):
+                            total_shane_solo_expense_count += 1
+                            total_shane_solo_amount += amount_value
                 
             elif income_expense_value == "Income":
                 total_income_count += 1
@@ -188,7 +219,7 @@ def analyze_money_manager(file_path):
     output.append(f"- Total Income Entry: {total_income_count}")
     output.append(f"- Total Expense Entry: {total_expense_count}")
 
-    # Most common category, subcategory
+    # TODO: Most common category, subcategory
 
     output.append("\n## Expense Accounts")
     output.append("| Account | Number of Entries ↓ |")
@@ -204,7 +235,7 @@ def analyze_money_manager(file_path):
     for income_from, (count, total, first_instance) in top_10_income_from_data:
         output.append(f"| {income_from} | {count} | PHP {total:,.2f} | {first_instance} |")
 
-    # Top 5 Highest income earned with date
+    # TODO: Top 5 Highest income earned with date
 
     output.append("\n## Top 30 Expense From")
     top_30_purchase_from_data = sorted(purchase_from_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
@@ -220,7 +251,7 @@ def analyze_money_manager(file_path):
     for purchase_from, (_, total, _) in top_30_purchase_from_data:
         output.append(f"| {purchase_from} | PHP {total:,.2f} |")
 
-    # Top 10 Most expensive expense with date
+    # TODO: Top 10 Most expensive expense with date
 
     output.append("\n## Top 10 Grocery Store")
     output.append("| Grocery | Number of Entries ↓ | Total Amount | First Instance   |")
@@ -236,7 +267,7 @@ def analyze_money_manager(file_path):
     for grocery, (_, total, _) in top_10_grocery_data:
         output.append(f"| {grocery} | PHP {total:,.2f} |")
 
-    output.append("\n## Top 30 Food")
+    output.append("\n## Top 30 Food Establishments")
     top_30_food_data = sorted(food_data.items(), key=lambda item: item[1][0], reverse=True)[:30]
     output.append("| Food Establishments | Number of Entries ↓ | Total Amount | First Instance |")
     output.append("|-------------------|-------------------|--------------|------------------|") 
@@ -265,6 +296,16 @@ def analyze_money_manager(file_path):
     output.append(f"- Total GrabFood Count: {total_grab_food_count}")
     output.append(f"- Total GrabCar Count: {total_grab_car_count}")
     output.append(f"- Total 711 Count: {total_711}")
+    output.append(f"- Total @Christian tagged Expense({total_christian_solo_expense_count}): PHP {total_christian_solo_amount:,.2f}")
+    output.append(f"- Total @Shane tagged Expense({total_shane_solo_expense_count}): PHP {total_shane_solo_amount:,.2f}")
+
+    output.append("\n## Data Dump")
+    output.append(f"\n### Shopee Orders({len(shopee_orders)}):")
+    output.append(', '.join(shopee_orders))
+    output.append(f"\n### Lazada Orders({len(lazada_orders)}):")
+    output.append(', '.join(lazada_orders))
+    output.append(f"\n### Amazon Orders({len(amazon_orders)}):")
+    output.append(', '.join(amazon_orders))
 
     return output
 
