@@ -4,6 +4,7 @@ import argparse
 from PyPDF2 import PdfReader
 import re
 from gspread_formatting import format_cell_range, CellFormat, TextFormat
+from datetime import datetime
 
 #TODO:
 # - Integrate moneymanager which is a backup
@@ -81,21 +82,29 @@ def update_google_sheet(sheet_name, billing_period, pdf_data, total_amount):
 if __name__ == "__main__":
     # parse passed params
     parser = argparse.ArgumentParser(description="CC Analyzer")
-    parser.add_argument("--sheet-name", required=True, help="Name of the Google Sheet")
-    parser.add_argument("--billing-period", required=True, help="Name of the worksheet to create")
-    parser.add_argument("--pdf-path", required=True, help="Path to the PDF file")
-    parser.add_argument("--pdf-password", required=True, help="Password for the PDF file")
+    parser.add_argument("--bank", required=True, help="Name of the bank")
 
     args = parser.parse_args()
 
     # load passed params to variables
-    sheet_name = args.sheet_name
-    billing_period = args.billing_period
-    pdf_path = args.pdf_path
-    pdf_password = args.pdf_password
+    bank = args.bank
+
+    if not bank == "Security Bank":
+        raise ValueError("Invalid bank name. Only 'Security Bank' is supported.")
+
+    # input details
+    sheet_name = input("Enter the name of the Google Sheet (Default: Security Bank World CC): ") or "Security Bank World CC"
+    billing_period = input("Enter billing period(MM YYYY): ") # TODO: Validate format
+    pdf_path = input("Enter the path to the PDF file(Default: dump/test.pdf): ") or "dump/test.pdf"
+    pdf_password = input("Enter the password for the PDF file: ")
     
     try:
         pdf_data, total_amount = extract_pdf_data(pdf_path, pdf_password)
+
+        # sort from oldest
+        pdf_data.sort(key=lambda x: datetime.strptime(x[1], "%m/%d/%y"))
+
+
         sheet = update_google_sheet(sheet_name, billing_period, pdf_data, total_amount)
 
         sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet.id}"
