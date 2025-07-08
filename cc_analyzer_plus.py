@@ -37,6 +37,7 @@ def extract_money_manager_data():
 
     mm_data = set(
         (
+            # TODO: Bug. MM Data seems to add +1 date on extracted data
             # datetime.strptime(row[period_idx], "%m/%d/%Y").strftime("%m/%d/%y"), 
             f"{float(row[amount_idx].replace(',', '')):,.2f}"
         )
