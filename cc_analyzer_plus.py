@@ -61,7 +61,6 @@ def extract_pdf_data(pdf_path, pdf_password):
     total_amount = 0
 
     mm_data = extract_money_manager_data()
-    write_to_file("dump/debug.txt", str(mm_data))
 
     # extract row data from PDF
     for page in reader.pages:
