@@ -5,10 +5,27 @@ from PyPDF2 import PdfReader
 import re
 from gspread_formatting import format_cell_range, CellFormat, TextFormat
 from datetime import datetime
-from utils.helpers import write_to_file
 
-#TODO:
-# - Integrate moneymanager which is a backup
+def is_match_within_days_and_amount(tran_date, amount, mm_data, days=3):
+    try:
+        pdf_date = datetime.strptime(tran_date, "%m/%d/%y")
+    except ValueError:
+        pdf_date = datetime.strptime(tran_date, "%m/%d/%Y")
+    for mm_tuple in mm_data:
+        mm_date_str, mm_amount, *rest = mm_tuple if isinstance(mm_tuple, tuple) else (mm_tuple, None, None)
+        try:
+            mm_date = datetime.strptime(mm_date_str, "%m/%d/%y")
+        except ValueError:
+            mm_date = datetime.strptime(mm_date_str, "%m/%d/%Y")
+        if abs((pdf_date - mm_date).days) <= days and amount == mm_amount:
+            return mm_tuple
+    return None
+
+def extract_mentions(description):
+    return re.findall(r'@\w+', description or "")
+
+def remove_mentions(description):
+    return re.sub(r'@\w+', '', description or "")
 
 def extract_money_manager_data():
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -23,6 +40,7 @@ def extract_money_manager_data():
         accounts_idx = header.index("Accounts")
         amount_idx = header.index("Amount")
         type_idx = header.index("Income/Expense")
+        description_idx = header.index("Description")
     except ValueError as e:
         raise ValueError(f"Missing column in Money Manager data: {e}")
 
@@ -38,8 +56,9 @@ def extract_money_manager_data():
     mm_data = set(
         (
             # TODO: Bug. MM Data seems to add +1 date on extracted data
-            # datetime.strptime(row[period_idx], "%m/%d/%Y").strftime("%m/%d/%y"), 
-            f"{float(row[amount_idx].replace(',', '')):,.2f}"
+            datetime.strptime(row[period_idx], "%m/%d/%Y").strftime("%m/%d/%y"), 
+            f"{float(row[amount_idx].replace(',', '')):,.2f}",
+            row[description_idx]
         )
         for row in data[1:]
         if len(row) > max(period_idx, amount_idx, accounts_idx)
@@ -75,12 +94,19 @@ def extract_pdf_data(pdf_path, pdf_password):
             if not description.startswith("PAYMENT"):
                 total_amount += float(amount.replace(",", ""))
                 note = ""
+                mm_description = ""
 
-                if (amount) not in mm_data:
+                matched_mm = is_match_within_days_and_amount(tran_date, amount, mm_data, days=3)
+
+                if not matched_mm:
                     # Add missing note if data is not found in Money Manager
-                    note = "Missing"
+                    note = "[!] "
 
-                pdf_data.append([tran_date, post_date, description, amount, note, "", "", ""])
+                if matched_mm:
+                    note += remove_mentions(matched_mm[2])
+                    mm_description = ", ".join(extract_mentions(matched_mm[2]))
+
+                pdf_data.append([tran_date, post_date, description, amount, note, mm_description, "", ""])
 
     return pdf_data, total_amount
 
