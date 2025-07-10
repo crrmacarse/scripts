@@ -78,20 +78,23 @@ def extract_pdf_data(pdf_path, pdf_password):
 
     pdf_data = []
     total_amount = 0
+    total_cr = 0
 
     mm_data = extract_money_manager_data()
+    matched_mm_set = set()
 
     # extract row data from PDF
     for page in reader.pages:
         text = page.extract_text()
 
-        table_pattern = re.compile(r"(\d{2}/\d{2}/\d{2})\s+(\d{2}/\d{2}/\d{2})\s+(.+?)\s+([\d,]+\.\d{2})")
+        table_pattern = re.compile(r"(\d{2}/\d{2}/\d{2})\s+(\d{2}/\d{2}/\d{2})\s+(.+?)\s+([\d,]+\.\d{2})(?:\s+(CR))?")
         matches = table_pattern.findall(text)
 
         for match in matches:
-            tran_date, post_date, description, amount = match
+            tran_date, post_date, description, amount, is_cr = match
+
             # skips payment transactions
-            if not description.startswith("PAYMENT"):
+            if not is_cr:
                 total_amount += float(amount.replace(",", ""))
                 note = ""
                 mm_description = ""
@@ -103,19 +106,25 @@ def extract_pdf_data(pdf_path, pdf_password):
                     note = "[!] "
 
                 if matched_mm:
+                    matched_mm_set.add(matched_mm)
                     note += remove_mentions(matched_mm[2])
                     mm_description = ", ".join(extract_mentions(matched_mm[2]))
 
                 pdf_data.append([tran_date, post_date, description, amount, note, mm_description, "", ""])
+            elif not description.startswith("PAYMENT"):
+                total_cr += float(amount.replace(",", ""))
+    
+    # unused_mm_data = mm_data - matched_mm_set
+    # print(unused_mm_data)
 
-    return pdf_data, total_amount
+    return pdf_data, total_amount, total_cr
 
 def authorize_google_sheets(scope):
     creds = ServiceAccountCredentials.from_json_keyfile_name("google-service-account.json", scope)
     client = gspread.authorize(creds)
     return client
 
-def update_google_sheet(sheet_name, billing_period, pdf_data, total_amount):
+def update_google_sheet(sheet_name, billing_period, pdf_data, total_amount, total_cr):
     # Google Sheets API setup
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     client = authorize_google_sheets(scope)
@@ -150,8 +159,14 @@ def update_google_sheet(sheet_name, billing_period, pdf_data, total_amount):
     # load pulled pdf data to worksheet
     new_worksheet.append_rows(pdf_data, value_input_option="USER_ENTERED")
 
+    grand_total = total_amount - total_cr
+    
     # add total row
-    new_worksheet.append_row(["", "", "", f"{total_amount:,.2f}"], value_input_option="USER_ENTERED")
+    new_worksheet.append_row(["", "", "TOTAL:", f"{total_amount:,.2f}"], value_input_option="USER_ENTERED")
+
+    new_worksheet.append_row(["", "", "REIMBURSED TOTAL:", f"{total_cr:,.2f}"], value_input_option="USER_ENTERED")
+
+    new_worksheet.append_row(["", "", "Grand Total:", f"{grand_total:,.2f}"], value_input_option="USER_ENTERED")
 
     return sheet
 
@@ -176,13 +191,13 @@ if __name__ == "__main__":
     pdf_password = input("Enter the password for the PDF file: ")
     
     try:
-        pdf_data, total_amount = extract_pdf_data(pdf_path, pdf_password)
+        pdf_data, total_amount, total_cr = extract_pdf_data(pdf_path, pdf_password)
 
         # sort from oldest
         pdf_data.sort(key=lambda x: datetime.strptime(x[1], "%m/%d/%y"))
 
 
-        sheet = update_google_sheet(sheet_name, billing_period, pdf_data, total_amount)
+        sheet = update_google_sheet(sheet_name, billing_period, pdf_data, total_amount, total_cr)
 
         sheet_url = f"https://docs.google.com/spreadsheets/d/{sheet.id}"
 
