@@ -11,6 +11,7 @@ gspread
 oauth2client
 PyPDF2
 gspread-formatting
+python-dateutil
 
 # scraper
 bs4

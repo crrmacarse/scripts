@@ -5,6 +5,7 @@ from PyPDF2 import PdfReader
 import re
 from gspread_formatting import format_cell_range, CellFormat, TextFormat
 from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 def is_match_within_days_and_amount(tran_date, amount, mm_data, days=3):
     try:
@@ -27,7 +28,7 @@ def extract_mentions(description):
 def remove_mentions(description):
     return re.sub(r'@\w+', '', description or "")
 
-def extract_money_manager_data():
+def extract_money_manager_data(cutoff_date):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
     client = authorize_google_sheets(scope)
     sheet = client.open("Money Manager Data")
@@ -44,19 +45,12 @@ def extract_money_manager_data():
     except ValueError as e:
         raise ValueError(f"Missing column in Money Manager data: {e}")
 
-    # TODO: Should be dependent from the period of processed pdf
-    # Retrieve 2 months ago data
-    today = datetime.today()
-    if today.month > 2:
-        cutoff = today.replace(month=today.month-2)
-    else:
-        # If it's Jan or Feb, subtract from previous year
-        cutoff = today.replace(year=today.year-1, month=12 + today.month-2)
+    cutoff_start = cutoff_date - relativedelta(months=1)
 
     mm_data = set(
         (
-            # TODO: Bug. MM Data seems to add +1 date on extracted data
-            datetime.strptime(row[period_idx], "%m/%d/%Y").strftime("%m/%d/%y"), 
+            # TODO: Bug. MM Data seems to be off by 1 day
+            (datetime.strptime(row[period_idx], "%m/%d/%Y") - relativedelta(days=1)).strftime("%m/%d/%y"),
             f"{float(row[amount_idx].replace(',', '')):,.2f}",
             row[description_idx]
         )
@@ -64,11 +58,12 @@ def extract_money_manager_data():
         if len(row) > max(period_idx, amount_idx, accounts_idx)
         and row[accounts_idx] == "Security Bank World"
         and row[type_idx] == "Exp."
-        and datetime.strptime(row[period_idx], "%m/%d/%Y") >= cutoff
+        and cutoff_start <= datetime.strptime(row[period_idx], "%m/%d/%Y") <= cutoff_date
     )
+    
     return mm_data
 
-def extract_pdf_data(pdf_path, pdf_password):
+def extract_pdf_data(pdf_path, pdf_password, mm_data):
     # read PDF file
     reader = PdfReader(pdf_path)
 
@@ -79,9 +74,6 @@ def extract_pdf_data(pdf_path, pdf_password):
     pdf_data = []
     total_amount = 0
     total_cr = 0
-
-    mm_data = extract_money_manager_data()
-    matched_mm_set = set()
 
     # extract row data from PDF
     for page in reader.pages:
@@ -106,7 +98,8 @@ def extract_pdf_data(pdf_path, pdf_password):
                     note = "[!] "
 
                 if matched_mm:
-                    matched_mm_set.add(matched_mm)
+                    mm_data.discard(matched_mm)
+                    # TODO: Not combining with matched_mm.
                     note += remove_mentions(matched_mm[2])
                     mm_description = ", ".join(extract_mentions(matched_mm[2]))
 
@@ -114,8 +107,9 @@ def extract_pdf_data(pdf_path, pdf_password):
             elif not description.startswith("PAYMENT"):
                 total_cr += float(amount.replace(",", ""))
     
-    # unused_mm_data = mm_data - matched_mm_set
-    # print(unused_mm_data)
+    print("Unused Money Manager Data:")
+    for unused in mm_data:
+        print(unused)
 
     return pdf_data, total_amount, total_cr
 
@@ -186,12 +180,22 @@ if __name__ == "__main__":
     
     # input details
     sheet_name = input("Enter the name of the Google Sheet (Default: Security Bank World CC): ") or "Security Bank World CC"
-    billing_period = input("Enter billing period(MM YYYY): ") # TODO: Validate format
+
+    while True:
+        cutoff_date = input("Enter Cutoff date (m/d/y): ")
+        try:
+            cutoff_date = datetime.strptime(cutoff_date, "%m/%d/%y")
+            billing_period = cutoff_date.strftime("%B %Y")
+            break
+        except ValueError:
+            print("Invalid format. Please enter as MM/DD/YY (e.g. 6/20/25)")
+
     pdf_path = input("Enter the path to the PDF file(Default: dump/test.pdf): ") or "dump/test.pdf"
     pdf_password = input("Enter the password for the PDF file: ")
     
     try:
-        pdf_data, total_amount, total_cr = extract_pdf_data(pdf_path, pdf_password)
+        mm_data = extract_money_manager_data(cutoff_date)
+        pdf_data, total_amount, total_cr = extract_pdf_data(pdf_path, pdf_password, mm_data)
 
         # sort from oldest
         pdf_data.sort(key=lambda x: datetime.strptime(x[1], "%m/%d/%y"))
