@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Error {{ status_code }} · tools.crrm.dev{% endblock %}
+{% block content %}
+<section class="centered">
+  <div class="card narrow">
+    <h1>{{ status_code }}</h1>
+    <p>{{ detail }}</p>
+    <a class="btn" href="/">Back to tools</a>
+  </div>
+</section>
+{% endblock %}

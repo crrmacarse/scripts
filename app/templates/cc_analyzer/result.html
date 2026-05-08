@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Analysis · CC Analyzer Plus{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / <a href="/tools/cc-analyzer">cc-analyzer</a> / analysis</div>
+  <h1>{{ result.billing_period }}</h1>
+  <p class="muted">Sheet: <strong>{{ result.sheet_name }}</strong> · Cutoff: <strong>{{ result.cutoff_date }}</strong></p>
+</div>
+
+<div class="summary">
+  <div class="stat">
+    <div class="k">PDF rows</div>
+    <div class="v">{{ result.rows | length }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Total</div>
+    <div class="v">{{ "%.2f" | format(result.total_amount) }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Reimbursed (CR)</div>
+    <div class="v">{{ "%.2f" | format(result.total_cr) }}</div>
+  </div>
+  <div class="stat ok">
+    <div class="k">Grand total</div>
+    <div class="v">{{ "%.2f" | format(result.grand_total) }}</div>
+  </div>
+  {% set issue_count = result.issue_count %}
+  <div class="stat {% if issue_count == 0 %}ok{% elif issue_count > 5 %}danger{% else %}warn{% endif %}">
+    <div class="k">Issues to review</div>
+    <div class="v">{{ issue_count }}</div>
+  </div>
+</div>
+
+{% if issue_count == 0 %}
+  <div class="alert alert-ok">No issues detected. You can confirm and push to Google Sheets.</div>
+{% else %}
+  <div class="alert alert-warn">Review flagged rows below. Fix them in Money Manager on your phone, then click <em>Re-analyze</em>.</div>
+{% endif %}
+
+<div class="section-heading">
+  <h2>PDF transactions</h2>
+  <span class="muted">{{ result.rows | length }} rows</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>Tran</th>
+      <th>Post</th>
+      <th>Merchant</th>
+      <th class="amount">Amount</th>
+      <th>MM note / hint</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in result.rows %}
+      <tr>
+        <td><span class="row-status {{ row.status }}">{{ row.status }}</span></td>
+        <td>{{ row.pdf.tran_date }}</td>
+        <td>{{ row.pdf.post_date }}</td>
+        <td>{{ row.pdf.description }}</td>
+        <td class="amount">{{ row.pdf.amount }}</td>
+        <td>
+          {% if row.status == "matched" %}
+            <span class="muted">{{ row.note or "—" }}</span>
+            {% if row.mm_mentions %}<br><small class="muted">{{ row.mm_mentions }}</small>{% endif %}
+          {% elif row.status == "inaccurate" %}
+            {% for cand in row.nearest_candidates %}
+              <div><small>{{ cand.date }} · {{ cand.amount }} · {{ cand.description }}</small></div>
+            {% endfor %}
+          {% elif row.status == "missing" %}
+            <span class="row-status missing">add to Money Manager</span>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% if result.unused_mm %}
+<div class="section-heading">
+  <h2>Unused Money Manager entries</h2>
+  <span class="muted">{{ result.unused_mm | length }} rows · in MM but not on the bill</span>
+</div>
+<table>
+  <thead>
+    <tr>
+      <th>Status</th>
+      <th>MM date</th>
+      <th>Period</th>
+      <th>Description</th>
+      <th class="amount">Amount</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for entry in result.unused_mm %}
+      <tr>
+        <td><span class="row-status unused">unused</span></td>
+        <td>{{ entry.date }}</td>
+        <td>{{ entry.raw_period }}</td>
+        <td>{{ entry.description }}</td>
+        <td class="amount">{{ entry.amount }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<div class="actions">
+  <a class="btn" href="/tools/cc-analyzer">Re-analyze (re-upload)</a>
+  <form method="post" action="/tools/cc-analyzer/confirm" class="inline" onsubmit="return confirm('Push {{ result.rows | length }} rows to {{ result.sheet_name }} as worksheet \'{{ result.billing_period }}\'?');">
+    <input type="hidden" name="confirm_token" value="{{ confirm_token }}" />
+    <button type="submit" class="btn btn-primary">Confirm &amp; Push to Sheet</button>
+  </form>
+</div>
+{% endblock %}

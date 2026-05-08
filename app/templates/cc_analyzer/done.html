@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Done · CC Analyzer Plus{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / <a href="/tools/cc-analyzer">cc-analyzer</a> / done</div>
+  <h1>{% if error %}Push failed{% else %}Pushed{% endif %}</h1>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  <p>The PDF analysis completed, but writing to Google Sheets failed. Nothing was written.</p>
+{% else %}
+  <div class="alert alert-ok">Worksheet <strong>{{ billing_period }}</strong> created.</div>
+  {% if sheet_url %}
+    <p><a class="btn btn-primary" href="{{ sheet_url }}" target="_blank" rel="noopener">Open Google Sheet ↗</a></p>
+  {% endif %}
+{% endif %}
+
+<div class="actions">
+  <a class="btn" href="/tools/cc-analyzer">Back to analyzer</a>
+  <a class="btn" href="/">All tools</a>
+</div>
+{% endblock %}

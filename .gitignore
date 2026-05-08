@@ -4,3 +4,5 @@ examples.MD
 .DS_Store
 .env
 __pycache__
+.vercel
+node_modules

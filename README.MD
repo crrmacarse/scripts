@@ -2,6 +2,50 @@
 
 Making my life easier, one script at a time.
 
+Available as a web hub at **[tools.crrm.dev](https://tools.crrm.dev)**.
+
+## tools.crrm.dev (web app)
+
+A FastAPI app that wraps these scripts for browser use, deployed on Vercel.
+
+### Local development
+
+```sh
+pip3 install -r requirements.txt
+cp .env.example .env  # fill in values
+uvicorn app.main:app --reload
+```
+
+`app/main.py` calls `load_dotenv()` at import time, so values in `.env` are picked up automatically in dev. In production, Vercel injects env vars itself.
+
+Then open http://127.0.0.1:8000.
+
+### Environment variables
+
+| Variable | Required | Notes |
+| --- | --- | --- |
+| `SESSION_SECRET` | yes | Long random string. Signs session cookies. |
+| `TOOLS_PASSWORD` | for gated tools | Shared password protecting the CC analyzer. Other tools stay public. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | one of the two | Raw JSON of the Google service account. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON_B64` | one of the two | Base64-encoded JSON of the service account. Easier to paste into Vercel. |
+
+To produce the base64 form: `base64 -i google-service-account.json | pbcopy`.
+
+### Vercel deployment
+
+1. `vercel link` and `vercel deploy` from the project root.
+2. Add the env vars above in the Vercel project's Settings → Environment Variables.
+3. Map the `tools.crrm.dev` domain to the project (Settings → Domains).
+
+`vercel.json` rewrites everything to `api/index.py`, which mounts the FastAPI app from `app/main.py`.
+
+### Adding new tools
+
+1. Add a service module under `app/services/`.
+2. Add a router under `app/routes/` and include it in `app/main.py`.
+3. Register the tool in `app/tools_registry.py` so it shows on the home page.
+4. Add `dependencies=[Depends(require_auth)]` to the router if it should sit behind the password gate.
+
 ## Setting up
 
 ### Utilizing venv

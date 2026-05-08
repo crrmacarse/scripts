@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}tools.crrm.dev{% endblock %}
+{% block content %}
+<section class="hero">
+  <h1>Personal tools</h1>
+  <p class="muted">A small collection of scripts I use to make my life easier — now on the web.</p>
+</section>
+
+<section class="tool-grid">
+  {% for tool in tools %}
+    <article class="tool-card {% if not tool.available %}is-disabled{% endif %}">
+      <header>
+        <h2>{{ tool.name }}</h2>
+        <div class="badges">
+          {% if tool.protected %}<span class="badge badge-lock">protected</span>{% endif %}
+          {% if not tool.available %}<span class="badge badge-soon">coming soon</span>{% endif %}
+        </div>
+      </header>
+      <p>{{ tool.description }}</p>
+      {% if tool.available %}
+        <a class="btn" href="{{ tool.href }}">Open →</a>
+      {% else %}
+        <span class="btn btn-disabled">Open →</span>
+      {% endif %}
+    </article>
+  {% endfor %}
+</section>
+{% endblock %}

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}CC Analyzer Plus · tools.crrm.dev{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / cc-analyzer</div>
+  <h1>CC Analyzer Plus</h1>
+  <p class="muted">Upload a Security Bank credit card PDF, pick the cutoff month, and we'll reconcile it against your Money Manager data before any sheet is written.</p>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<details class="help">
+  <summary>How it works</summary>
+  <ul>
+    <li>Each PDF transaction is matched to a Money Manager entry within ±3 days at the same amount.</li>
+    <li>If the amount is off by ≤5% within ±5 days we flag it as <em>inaccurate</em> for review.</li>
+    <li>Anything else flags as <em>missing</em> — fix it on your phone, then re-upload to re-analyse.</li>
+    <li>MM entries that no PDF row consumed are listed as <em>unused</em>.</li>
+    <li>Nothing is written to Google Sheets until you click <strong>Confirm &amp; Push</strong>.</li>
+  </ul>
+</details>
+
+<div class="card">
+  <form method="post" action="/tools/cc-analyzer/analyze" enctype="multipart/form-data">
+    <div class="form-grid">
+      <label>
+        <span>Google Sheet name</span>
+        <input type="text" name="sheet_name" value="{{ default_sheet_name }}" required />
+      </label>
+      <label>
+        <span>Cutoff date</span>
+        <input type="date" name="cutoff_date" required />
+      </label>
+      <label class="full">
+        <span>Credit card PDF</span>
+        <input type="file" name="pdf_file" accept="application/pdf" required />
+      </label>
+      <label class="full">
+        <span>PDF password (leave blank if not encrypted)</span>
+        <input type="password" name="pdf_password" autocomplete="off" />
+      </label>
+      <div class="full">
+        <span class="muted" style="display:block; font-size: 0.85rem; margin-bottom: 0.4rem;">Money Manager source</span>
+        <div class="toggle-group">
+          <label>
+            <input type="radio" name="mm_source" value="google_sheet" checked />
+            Google Sheet ("Money Manager Data")
+          </label>
+          <label>
+            <input type="radio" name="mm_source" value="xlsx" />
+            Upload xlsx export
+          </label>
+        </div>
+      </div>
+      <label class="full">
+        <span>Money Manager xlsx (only if source = xlsx)</span>
+        <input type="file" name="mm_file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+      </label>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Analyze</button>
+      <a class="btn" href="/">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}
