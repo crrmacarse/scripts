@@ -26,10 +26,13 @@ Then open http://127.0.0.1:8000.
 | --- | --- | --- |
 | `SESSION_SECRET` | yes | Long random string. Signs session cookies. |
 | `TOOLS_PASSWORD` | for gated tools | Shared password protecting the CC analyzer. Other tools stay public. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | one of the two | Raw JSON of the Google service account. |
-| `GOOGLE_SERVICE_ACCOUNT_JSON_B64` | one of the two | Base64-encoded JSON of the service account. Easier to paste into Vercel. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | one of these | Raw JSON of the Google service account. |
+| `GOOGLE_SERVICE_ACCOUNT_JSON_B64` | one of these | Base64-encoded JSON. Best for Vercel — paste as a single line. |
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | one of these | Absolute path to the JSON file (handy for dev). |
 
-To produce the base64 form: `base64 -i google-service-account.json | pbcopy`.
+If none of those are set, the app falls back to `./google-service-account.json` at the repo root (this is the easiest local-dev setup — the file is gitignored). Resolution order is: raw JSON → base64 → explicit file path → repo-root fallback.
+
+To produce the base64 form for Vercel: `base64 -i google-service-account.json | pbcopy`.
 
 ### Vercel deployment
 
