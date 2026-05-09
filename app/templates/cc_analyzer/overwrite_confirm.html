@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Overwrite worksheet · CC Analyzer Plus{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / <a href="/tools/cc-analyzer">cc-analyzer</a> / overwrite</div>
+  <h1>Worksheet already exists</h1>
+</div>
+
+<div class="alert alert-warn">
+  A worksheet titled <strong>{{ billing_period }}</strong> already exists on
+  <strong>{{ sheet_name }}</strong>. Pushing again will <strong>delete the existing tab</strong>
+  and replace it with the current data.
+</div>
+
+<form method="post" action="/tools/cc-analyzer/confirm" class="inline" onsubmit="return confirm('Replace existing worksheet \'{{ billing_period }}\'? The old tab will be deleted.');">
+  <input type="hidden" name="confirm_token" value="{{ confirm_token }}" />
+  <input type="hidden" name="shoulder_data" value="{{ shoulder_data }}" />
+  <input type="hidden" name="force_overwrite" value="1" />
+  <div class="actions">
+    <a class="btn" href="/tools/cc-analyzer">Cancel</a>
+    <button type="submit" class="btn btn-danger">Overwrite worksheet</button>
+  </div>
+</form>
+{% endblock %}

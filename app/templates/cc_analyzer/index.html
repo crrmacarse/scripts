@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}CC Analyzer Plus · tools.crrm.dev{% endblock %}
+{% block title %}Credit Card Analyzer · tools.crrm.dev{% endblock %}
 {% block content %}
 <div class="page-header">
   <div class="crumbs"><a href="/">tools</a> / cc-analyzer</div>
-  <h1>CC Analyzer Plus</h1>
-  <p class="muted">Upload a Security Bank credit card PDF, pick the cutoff month, and we'll reconcile it against your Money Manager data before any sheet is written.</p>
+  <h1>Credit Card Analyzer</h1>
+  <p class="muted">Pick a credit card, upload its PDF bill, and we'll reconcile it against your Money Manager data before any sheet is written.</p>
 </div>
 
 {% if error %}
@@ -17,7 +17,7 @@
     <li>Each PDF transaction is matched to a Money Manager entry within ±3 days at the same amount.</li>
     <li>If the amount is off by ≤5% within ±5 days we flag it as <em>inaccurate</em> for review.</li>
     <li>Anything else flags as <em>missing</em> — fix it on your phone, then re-upload to re-analyse.</li>
-    <li>MM entries that no PDF row consumed are listed as <em>unused</em>.</li>
+    <li>The credit card PDF is the source of truth — adjust Money Manager to match.</li>
     <li>Nothing is written to Google Sheets until you click <strong>Confirm &amp; Push</strong>.</li>
   </ul>
 </details>
@@ -26,19 +26,28 @@
   <form method="post" action="/tools/cc-analyzer/analyze" enctype="multipart/form-data">
     <div class="form-grid">
       <label>
-        <span>Google Sheet name</span>
-        <input type="text" name="sheet_name" value="{{ default_sheet_name }}" required />
+        <span>Credit Card</span>
+        <select name="credit_card" required>
+          {% for card in credit_cards %}
+            <option
+              value="{{ card.key }}"
+              {% if card.key == selected_card_key %}selected{% endif %}
+            >
+              {{ card.label }}
+            </option>
+          {% endfor %}
+        </select>
       </label>
       <label>
         <span>Cutoff date</span>
         <input type="date" name="cutoff_date" required />
       </label>
       <label class="full">
-        <span>Credit card PDF</span>
+        <span>Credit Card Statement</span>
         <input type="file" name="pdf_file" accept="application/pdf" required />
       </label>
       <label class="full">
-        <span>PDF password (leave blank if not encrypted)</span>
+        <span>Credit Card Statement password (leave blank if not encrypted)</span>
         <input type="password" name="pdf_password" autocomplete="off" />
       </label>
       <div class="full">
@@ -65,4 +74,5 @@
     </div>
   </form>
 </div>
+
 {% endblock %}

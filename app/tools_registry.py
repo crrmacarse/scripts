@@ -14,7 +14,7 @@ class Tool:
 TOOLS: list[Tool] = [
     Tool(
         slug="cc-analyzer",
-        name="CC Analyzer Plus",
+        name="Credit Card Analyzer",
         description=(
             "Reconcile a Security Bank credit card PDF bill against your "
             "Money Manager data. Flags missing, duplicate, and inaccurate "

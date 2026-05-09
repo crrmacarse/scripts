@@ -49,6 +49,38 @@ To produce the base64 form for Vercel: `base64 -i google-service-account.json | 
 3. Register the tool in `app/tools_registry.py` so it shows on the home page.
 4. Add `dependencies=[Depends(require_auth)]` to the router if it should sit behind the password gate.
 
+### CC Analyzer Plus — workflow reference
+
+The result page also exposes this as a "How this works" modal in the top-right.
+
+**The flow.** Upload PDF + cutoff + MM source → server parses PDF, fetches MM for the billing cycle, reconciles → review flagged rows → fix MM on phone → Re-analyze → Confirm & Push when reconciled.
+
+**Status labels.** A CC transaction can land in one of three states:
+- `matched` — MM entry within ±3 days at the same amount.
+- `inaccurate` — MM entry within ±5 days at ≤5% amount drift.
+- `missing` — no MM entry close enough.
+
+**Resolve options** (per non-matched row, in fall-through order):
+1. Algorithm-suggested candidate checkboxes (inaccurate only).
+2. Manual-pick dropdown — every MM entry in the cycle.
+3. "To be added manually" — fall-through; you'll create a new MM entry.
+
+Within a row, picking any option clears the others. Picking an MM entry in row A locks it from being picked in row B and strikes it through in the bottom MM table.
+
+**MM lookup window.** Anchored to the billing cycle: `cutoff − 1 month + 1 day … cutoff`, padded ±3 days. The `Period` column is shown verbatim; matching internally compares against `Period − 1 day` to absorb a known one-day drift.
+
+**Punch list actions** (live in "What to do in Money Manager"):
+- `Add` — create a new MM entry from the CC tx.
+- `Update` — change an existing MM entry's amount to match CC.
+- `Match` — MM entry already equals CC; no change needed.
+- `Remove` — appears once every CC row is resolved; lists MM entries that didn't link to anything.
+
+**Verification panel** projects MM count + total *after* applying the punch list. Diff card turns green when projected MM count = CC count and projected MM total = CC total (within 1 cent).
+
+**Re-analyze vs Confirm & Push.** Re-analyze (Google Sheet source only) re-fetches MM with the cached PDF — no re-upload. Confirm & Push writes a new worksheet to the destination Google Sheet; don't push until the Verification panel is green.
+
+**Due date.** Cutoff + 21 days, bumped past weekends. Display only — does not affect the lookup window. Holidays are not modelled.
+
 ## Setting up
 
 ### Utilizing venv

@@ -1,47 +1,64 @@
 {% extends "base.html" %}
-{% block title %}Analysis · CC Analyzer Plus{% endblock %}
+{% block title %}Analysis · Credit Card Analyzer{% endblock %}
 {% block content %}
 <div class="page-header">
   <div class="crumbs"><a href="/">tools</a> / <a href="/tools/cc-analyzer">cc-analyzer</a> / analysis</div>
-  <h1>{{ result.billing_period }}</h1>
-  <p class="muted">Sheet: <strong>{{ result.sheet_name }}</strong> · Cutoff: <strong>{{ result.cutoff_date }}</strong></p>
+  <div class="page-header-row">
+    <h1>{{ result.billing_period }}</h1>
+    <button type="button" class="btn btn-ghost help-trigger" data-help-open>How this works</button>
+  </div>
+  <p class="muted">
+    {% if credit_card %}{{ credit_card.label }} · {% endif %}
+    Sheet: <strong>{{ result.sheet_name }}</strong> ·
+    Cutoff: <strong>{{ result.cutoff_date }}</strong> ·
+    Due: <strong>{{ result.due_date }}</strong>
+  </p>
+  <p class="muted" style="font-size: 0.78rem; margin-top: 0.2rem;">
+    Due date is cutoff + {{ credit_card.due_days if credit_card else 21 }} days, bumped past weekends.
+    If it falls on a holiday the actual banking day will be later.
+    MM lookup is anchored to the billing cycle (cutoff − 1 month … cutoff − 1 day) with +1 day pad on the upper edge for MM-export drift. The cutoff date itself belongs to the next bill.
+  </p>
 </div>
 
+{% set issue_count = result.issue_count %}
+{% set diff = result.cc_vs_mm_difference %}
 <div class="summary">
   <div class="stat">
-    <div class="k">PDF rows</div>
+    <div class="k">CC Statement count</div>
     <div class="v">{{ result.rows | length }}</div>
   </div>
   <div class="stat">
-    <div class="k">Total</div>
-    <div class="v">{{ "%.2f" | format(result.total_amount) }}</div>
+    <div class="k">CC Statement Total</div>
+    <div class="v">{{ "%.2f" | format(result.cc_statement_total) }}</div>
   </div>
   <div class="stat">
-    <div class="k">Reimbursed (CR)</div>
-    <div class="v">{{ "%.2f" | format(result.total_cr) }}</div>
+    <div class="k">MM count</div>
+    <div class="v">{{ result.mm_total_count }}</div>
   </div>
-  <div class="stat ok">
-    <div class="k">Grand total</div>
-    <div class="v">{{ "%.2f" | format(result.grand_total) }}</div>
+  <div class="stat">
+    <div class="k">MM Total</div>
+    <div class="v">{{ "%.2f" | format(result.mm_total_amount) }}</div>
   </div>
-  {% set issue_count = result.issue_count %}
-  <div class="stat {% if issue_count == 0 %}ok{% elif issue_count > 5 %}danger{% else %}warn{% endif %}">
-    <div class="k">Issues to review</div>
-    <div class="v">{{ issue_count }}</div>
+  <div class="stat {% if diff == 0 %}ok{% else %}danger{% endif %}">
+    <div class="k">CC vs MM Difference</div>
+    <div class="v">{{ "%+.2f" | format(diff) }}</div>
   </div>
 </div>
 
 {% if issue_count == 0 %}
   <div class="alert alert-ok">No issues detected. You can confirm and push to Google Sheets.</div>
 {% else %}
-  <div class="alert alert-warn">Review flagged rows below. Fix them in Money Manager on your phone, then click <em>Re-analyze</em>.</div>
+  <div class="alert alert-warn">
+    The credit card PDF is the source of truth — adjust Money Manager to match.
+    Resolve flagged rows on the right; the matching MM entry below gets struck through as you go.
+  </div>
 {% endif %}
 
 <div class="section-heading">
-  <h2>PDF transactions</h2>
-  <span class="muted">{{ result.rows | length }} rows</span>
+  <h2>Credit Card Transactions</h2>
+  <span class="muted"><span data-cc-resolved-count>0</span> / {{ result.rows | length }} resolved</span>
 </div>
-<table>
+<table class="pdf-table">
   <thead>
     <tr>
       <th>Status</th>
@@ -49,12 +66,24 @@
       <th>Post</th>
       <th>Merchant</th>
       <th class="amount">Amount</th>
-      <th>MM note / hint</th>
+      <th>MM note</th>
+      <th class="col-resolve">Resolve</th>
+      <th class="col-detail-toggle" aria-label="Show MM details"></th>
     </tr>
   </thead>
   <tbody>
     {% for row in result.rows %}
-      <tr>
+      <tr
+        id="row-{{ row.row_id }}"
+        data-row-id="{{ row.row_id }}"
+        data-status="{{ row.status }}"
+        {% if row.matched_mm %}
+          data-matched-mm-period="{{ row.matched_mm.raw_period }}"
+          data-matched-mm-expense="{{ row.matched_mm.expense_name }}"
+          data-matched-mm-description="{{ row.matched_mm.description }}"
+          data-matched-mm-amount="{{ row.matched_mm.amount }}"
+        {% endif %}
+      >
         <td><span class="row-status {{ row.status }}">{{ row.status }}</span></td>
         <td>{{ row.pdf.tran_date }}</td>
         <td>{{ row.pdf.post_date }}</td>
@@ -64,53 +93,967 @@
           {% if row.status == "matched" %}
             <span class="muted">{{ row.note or "—" }}</span>
             {% if row.mm_mentions %}<br><small class="muted">{{ row.mm_mentions }}</small>{% endif %}
-          {% elif row.status == "inaccurate" %}
-            {% for cand in row.nearest_candidates %}
-              <div><small>{{ cand.date }} · {{ cand.amount }} · {{ cand.description }}</small></div>
-            {% endfor %}
-          {% elif row.status == "missing" %}
-            <span class="row-status missing">add to Money Manager</span>
+          {% else %}
+            <span class="muted">—</span>
           {% endif %}
+        </td>
+        <td class="col-resolve">
+          {% if row.status == "missing" %}
+            {% if result.unused_mm %}
+              <select class="manual-pick" data-row-id="{{ row.row_id }}" aria-label="Or link to an existing Money Manager entry">
+                <option value="">— pick from MM list —</option>
+                {% for entry in result.unused_mm %}
+                  <option value="{{ loop.index0 }}">
+                    {{ entry.raw_period }} · {{ entry.amount }}{% if entry.expense_name %} · {{ entry.expense_name }}{% endif %}{% if entry.description %} · {{ entry.description }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            {% endif %}
+            <label class="resolve-option">
+              <input type="checkbox" class="resolve-check" data-mode="add" />
+              <span>To be added manually</span>
+            </label>
+          {% elif row.status == "inaccurate" %}
+            <div class="resolve-options" role="group" aria-label="Pick the matching Money Manager entry">
+              {% for cand_idx in row.candidate_unused_ids %}
+                {% set cand = result.unused_mm[cand_idx] %}
+                <label class="resolve-option">
+                  <input
+                    type="checkbox"
+                    class="resolve-check"
+                    data-mode="link"
+                    data-resolves-unused="{{ cand_idx }}"
+                  />
+                  <span class="cand-info">
+                    <span class="cand-headline">{{ cand.raw_period }} · {{ cand.amount }}</span>
+                    {% if cand.expense_name or cand.description %}
+                      <small class="muted">
+                        {%- if cand.expense_name %}{{ cand.expense_name }}{% endif -%}
+                        {%- if cand.expense_name and cand.description %} · {% endif -%}
+                        {%- if cand.description %}{{ cand.description }}{% endif -%}
+                      </small>
+                    {% endif %}
+                  </span>
+                </label>
+              {% endfor %}
+            </div>
+            {% if result.unused_mm %}
+              <select class="manual-pick" data-row-id="{{ row.row_id }}" aria-label="Or link to a different Money Manager entry">
+                <option value="">— or pick another from MM list —</option>
+                {% for entry in result.unused_mm %}
+                  <option value="{{ loop.index0 }}">
+                    {{ entry.raw_period }} · {{ entry.amount }}{% if entry.expense_name %} · {{ entry.expense_name }}{% endif %}{% if entry.description %} · {{ entry.description }}{% endif %}
+                  </option>
+                {% endfor %}
+              </select>
+            {% endif %}
+            <label class="resolve-option">
+              <input type="checkbox" class="resolve-check" data-mode="add" />
+              <span>To be added manually</span>
+            </label>
+          {% else %}
+            <span class="muted">—</span>
+          {% endif %}
+        </td>
+        <td class="col-detail-toggle">
+          <button
+            type="button"
+            class="row-toggle"
+            data-toggle-row="{{ row.row_id }}"
+            aria-expanded="false"
+            aria-label="Show linked Money Manager entry"
+            title="Show linked Money Manager entry"
+          >▸</button>
+        </td>
+      </tr>
+      <tr class="row-detail" data-detail-for="{{ row.row_id }}" hidden>
+        <td colspan="8">
+          <div class="row-detail-content" data-detail-content>
+            {% if row.matched_mm %}
+              <strong>MM:</strong>
+              {{ row.matched_mm.raw_period }} ·
+              <span class="amount-inline">{{ row.matched_mm.amount }}</span>
+              {% if row.matched_mm.expense_name %} · {{ row.matched_mm.expense_name }}{% endif %}
+              {% if row.matched_mm.description %}
+                <br><small class="muted">{{ row.matched_mm.description }}</small>
+              {% endif %}
+            {% else %}
+              <span class="muted">No MM entry linked yet.</span>
+            {% endif %}
+          </div>
         </td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
 
+<div id="all-resolved-banner" class="alert alert-ok all-resolved-banner" hidden>
+  All credit card transactions resolved. Apply the punch list below, then push to sheet.
+</div>
+
 {% if result.unused_mm %}
 <div class="section-heading">
-  <h2>Unused Money Manager entries</h2>
-  <span class="muted">{{ result.unused_mm | length }} rows · in MM but not on the bill</span>
+  <h2>Money Manager CC entries</h2>
+  <span class="muted"><span data-mm-addressed-count>0</span> / <span data-mm-cycle-count>0</span> addressed (linked or excluded)</span>
+  <label class="mm-show-all-toggle" title="Reveal MM entries dated within ±3 days of the cycle but technically outside it.">
+    <input type="checkbox" id="mm-show-all" />
+    <span>Show all MM data</span>
+  </label>
 </div>
-<table>
+<table class="mm-table">
   <thead>
     <tr>
-      <th>Status</th>
-      <th>MM date</th>
-      <th>Period</th>
+      <th class="col-mm-exclude" title="Exclude from reconciliation">Exclude</th>
+      <th>Date</th>
+      <th>Expense name</th>
       <th>Description</th>
       <th class="amount">Amount</th>
     </tr>
   </thead>
   <tbody>
     {% for entry in result.unused_mm %}
-      <tr>
-        <td><span class="row-status unused">unused</span></td>
-        <td>{{ entry.date }}</td>
-        <td>{{ entry.raw_period }}</td>
-        <td>{{ entry.description }}</td>
+      <tr
+        id="unused-{{ loop.index0 }}"
+        data-unused-id="{{ loop.index0 }}"
+        data-amount="{{ '%.2f' | format(entry.amount_value) }}"
+        data-in-cycle="{{ '1' if entry.in_cycle else '0' }}"
+        {% if not entry.in_cycle %}class="mm-extended" hidden{% endif %}
+      >
+        <td class="col-mm-exclude">
+          <label class="mm-exclude-label" title="Exclude this entry — won't appear as an option and won't be flagged as Remove.">
+            <input type="checkbox" class="mm-exclude" data-unused-id="{{ loop.index0 }}" />
+          </label>
+        </td>
+        <td>
+          {{ entry.raw_period }}
+          {% if not entry.in_cycle %}<small class="muted">· outside cycle</small>{% endif %}
+        </td>
+        <td>{{ entry.expense_name or '—' }}</td>
+        <td>{{ entry.description or '—' }}</td>
         <td class="amount">{{ entry.amount }}</td>
       </tr>
     {% endfor %}
   </tbody>
 </table>
+
+<div id="mm-all-addressed-banner" class="alert alert-ok all-resolved-banner" hidden>
+  Every Money Manager entry has been linked or excluded.
+</div>
 {% endif %}
 
+<section id="what-to-address-section" class="what-to-address">
+  <div class="section-heading">
+    <h2>What to do in Money Manager</h2>
+    <span class="muted">
+      <span data-address-done-count>0</span> / <span data-address-count>0</span> done
+    </span>
+  </div>
+  <table class="address-table">
+    <thead>
+      <tr>
+        <th class="col-action">Action</th>
+        <th>MM entry (current)</th>
+        <th>New value (from CC)</th>
+        <th class="col-task-check" aria-label="Mark done"></th>
+      </tr>
+    </thead>
+    <tbody id="what-to-address-body"></tbody>
+  </table>
+  <div id="what-to-address-empty" class="muted">Nothing to apply yet — resolve flagged rows above to populate this list.</div>
+</section>
+
+<section
+  id="verification-section"
+  class="verification"
+  data-cc-count="{{ result.rows | length }}"
+  data-cc-total="{{ '%.2f' | format(result.cc_statement_total) }}"
+  data-mm-count="{{ result.mm_total_count }}"
+  data-mm-total="{{ '%.2f' | format(result.mm_total_amount) }}"
+>
+  <div class="section-heading">
+    <h2>Verification</h2>
+    <span class="muted">Once you apply the punch list, MM should match CC.</span>
+  </div>
+  <div class="summary verification-summary">
+    <div class="stat">
+      <div class="k">Projected MM count</div>
+      <div class="v" data-projected-count>—</div>
+      <div class="muted" data-projected-count-delta></div>
+    </div>
+    <div class="stat">
+      <div class="k">Projected MM total</div>
+      <div class="v" data-projected-total>—</div>
+      <div class="muted" data-projected-total-delta></div>
+    </div>
+    <div class="stat" data-projected-status>
+      <div class="k">CC vs MM (projected)</div>
+      <div class="v" data-projected-diff>—</div>
+      <div class="muted" data-projected-status-text></div>
+    </div>
+  </div>
+</section>
+
+<section id="shoulders-section" class="shoulder-summary">
+  <div class="section-heading">
+    <h2>Shoulder Summary</h2>
+    <span class="muted">Each <code>@Name</code> tag in the MM note splits its CC amount equally among the tagged people.</span>
+  </div>
+  <ul id="shoulder-list" class="shoulder-list"></ul>
+  <div id="shoulder-empty" class="muted">No <code>@Name</code> tags in this period yet.</div>
+</section>
+
 <div class="actions">
-  <a class="btn" href="/tools/cc-analyzer">Re-analyze (re-upload)</a>
+  <a class="btn" href="/tools/cc-analyzer" title="Cancel">Cancel</a>
+  {% if mm_source == 'google_sheet' %}
+    <form method="post" action="/tools/cc-analyzer/reanalyze" class="inline">
+      <input type="hidden" name="reanalyze_token" value="{{ reanalyze_token }}" />
+      <button type="submit" class="btn" title="Re-fetch Money Manager data and re-run the analysis with the same PDF.">Re-analyze</button>
+    </form>
+  {% else %}
+    <a class="btn" href="/tools/cc-analyzer" title="xlsx source — re-upload required">Re-analyze (re-upload)</a>
+  {% endif %}
   <form method="post" action="/tools/cc-analyzer/confirm" class="inline" onsubmit="return confirm('Push {{ result.rows | length }} rows to {{ result.sheet_name }} as worksheet \'{{ result.billing_period }}\'?');">
     <input type="hidden" name="confirm_token" value="{{ confirm_token }}" />
-    <button type="submit" class="btn btn-primary">Confirm &amp; Push to Sheet</button>
+    <input type="hidden" name="shoulder_data" id="shoulder-data-field" value="[]" />
+    <button id="confirm-push-btn" type="submit" class="btn btn-primary">Confirm &amp; Push to Sheet</button>
   </form>
 </div>
+
+<dialog id="help-dialog" class="help-dialog">
+  <button type="button" class="help-close" data-help-close aria-label="Close help">×</button>
+  <h2>How CC Analyzer works</h2>
+
+  <section class="help-section">
+    <h3>The flow</h3>
+    <ol>
+      <li>Upload your CC PDF + cutoff date + Money Manager source.</li>
+      <li>Server parses the PDF, fetches MM entries for the billing cycle, and reconciles them.</li>
+      <li>Review the flagged rows, fix MM on your phone, and hit <strong>Re-analyze</strong> to re-check.</li>
+      <li>When everything reconciles, hit <strong>Confirm &amp; Push to Sheet</strong> to write a new worksheet.</li>
+    </ol>
+  </section>
+
+  <section class="help-section">
+    <h3>Status labels (CC Transactions table)</h3>
+    <ul>
+      <li><span class="row-status matched">matched</span> Found an MM entry with the same amount inside the CC period — picks the nearest by date when several have the same amount. Nothing to do.</li>
+      <li><span class="row-status inaccurate">inaccurate</span> No exact-amount entry inside the CC period, but one or more within ±5% amount drift. Candidates are ordered nearest-by-date first; pick the right one, manually link, or add manually.</li>
+      <li><span class="row-status missing">missing</span> No MM entry inside the CC period is within ±5% of the CC amount. Link to one from the MM list or add manually.</li>
+    </ul>
+    <p class="muted">"CC period" = the date range of the PDF's transactions (min..max tran date), padded ±3 days to absorb MM Period drift. The cycle pool below may extend slightly beyond this — those entries don't enter automatic matching, but you can still pick them via the manual-pick dropdown.</p>
+  </section>
+
+  <section class="help-section">
+    <h3>Resolve column (right-most)</h3>
+    <p class="muted">For each non-matched row, options are presented in fall-through order:</p>
+    <ol>
+      <li><strong>Candidate checkboxes</strong> (inaccurate only) — algorithm-suggested MM entries. Tick the right one.</li>
+      <li><strong>Pick from MM list</strong> dropdown — every MM entry in the cycle. Use this if the algorithm missed it.</li>
+      <li><strong>To be added manually</strong> — fall-through. No MM entry exists; you'll create one.</li>
+    </ol>
+    <p class="muted">Within a row, picking any option clears the others. Picking an MM entry in row A locks it from being picked in row B (and strikes it through in the bottom table).</p>
+  </section>
+
+  <section class="help-section">
+    <h3>Money Manager lookup window</h3>
+    <p>The bottom <em>Money Manager CC entries</em> table is anchored to the billing cycle: <code>cutoff − 1 month … cutoff − 1 day</code>. The cutoff date itself belongs to the next bill, not this one. We pad the upper edge by 1 day to catch MM exports that occasionally drift +1 day forward — so a sheet entry on the cutoff day still appears as the bill's last day. The lower edge stays strict to avoid pulling in pre-cycle entries that drift forward into the cycle start.</p>
+    <p>The MM <code>Period</code> column is what we display. The internal matching uses Period − 1 day to absorb a known one-day drift between MM and the bank.</p>
+  </section>
+
+  <section class="help-section">
+    <h3>How candidates are picked</h3>
+    <p>For each non-matched CC tx we scan every entry in the cycle pool. An MM entry becomes a candidate via either path:</p>
+    <ul>
+      <li><strong>Close on amount</strong> — within ±5% of the CC amount, regardless of merchant.</li>
+      <li><strong>Merchant hit</strong> — token overlap between the CC merchant string (e.g. <code>STARBUCKS MANILA</code>) and the MM expense name + description ≥ 70%, AND amount within ±50% of the CC. The amount cap stops a strong merchant overlap from pulling in a wildly different value (e.g. 173 vs 2,729).</li>
+    </ul>
+    <p class="muted">Generic location words (<code>manila</code>, <code>makati</code>, etc.) are filtered out before the merchant comparison so they don't trigger false positives. Candidates display earliest-by-date for consistency with the other tables.</p>
+  </section>
+
+  <section class="help-section">
+    <h3>Excluding MM entries</h3>
+    <p>The leftmost column on the MM table has an <strong>Exclude</strong> checkbox. Tick it for any entry that doesn't actually belong to this bill (e.g. a duplicate, a misposted cycle, or an entry you'll deal with separately).</p>
+    <p>An excluded entry:</p>
+    <ul>
+      <li>Disappears from candidate checkboxes and manual-pick dropdowns.</li>
+      <li>Is added to the punch list as a <strong>Remove</strong> action so you delete it from MM.</li>
+      <li>Drops from the projected MM count and total in the Verification panel.</li>
+    </ul>
+    <p class="muted">The bottom MM table is a review process — leftover entries are never auto-removed. You decide per entry whether it belongs on this bill (link it / leave it) or not (exclude it).</p>
+  </section>
+
+  <section class="help-section">
+    <h3>Action types in the punch list</h3>
+    <ul>
+      <li><span class="row-status missing">Add</span> Create a new MM entry from the CC tx (you ticked "To be added manually").</li>
+      <li><span class="row-status inaccurate">Update</span> Change an existing MM entry's amount to match CC.</li>
+      <li><span class="row-status matched">Match</span> The MM entry already equals CC — no MM change needed, just acknowledged.</li>
+      <li><span class="row-status missing">Remove</span> You ticked the <strong>Exclude</strong> checkbox on an MM entry — it doesn't belong on this bill, delete it from MM. Removal is never automatic; review each leftover entry yourself.</li>
+    </ul>
+  </section>
+
+  <section class="help-section">
+    <h3>Shoulder Summary</h3>
+    <p>Tag a Money Manager note with one or more <code>@Name</code> mentions and the bottom <em>Shoulder summary</em> panel splits that CC amount equally among the tagged people.</p>
+    <ul>
+      <li>Example: <code>Lunch with team @shane @christian</code> on a 600 CC tx → @shane = 300, @christian = 300.</li>
+      <li>Updates live as you tick candidate checkboxes or pick from the manual dropdown — picking an MM entry with tags adds them to the totals.</li>
+      <li>"Add" actions don't contribute (no MM entry yet, no tags to read).</li>
+    </ul>
+  </section>
+
+  <section class="help-section">
+    <h3>Verification panel</h3>
+    <p>As you tick resolves, the panel projects what your MM totals will look like <em>after</em> you apply the punch list. The diff card turns green when:</p>
+    <ul>
+      <li>Projected MM count = CC count, AND</li>
+      <li>Projected MM total = CC total (within 1 cent).</li>
+    </ul>
+    <p class="muted">If they don't match, fix the discrepancy in MM, hit Re-analyze, and try again.</p>
+  </section>
+
+  <section class="help-section">
+    <h3>Re-analyze vs Confirm &amp; Push</h3>
+    <ul>
+      <li><strong>Re-analyze</strong> (Google Sheet source only) — re-fetches MM data with the same PDF, no re-upload. Use it as many times as you want.</li>
+      <li><strong>Confirm &amp; Push</strong> — writes a new worksheet to the destination Google Sheet. Don't push until the Verification panel is green.</li>
+    </ul>
+  </section>
+
+  <section class="help-section">
+    <h3>Due date</h3>
+    <p>Cutoff + 21 days, bumped past weekends. If the bumped weekday is a public holiday, the actual banking day will be later — that part isn't modelled. Display only; it does not affect the lookup window.</p>
+  </section>
+
+  <div class="help-actions">
+    <button type="button" class="btn btn-primary" data-help-close>Got it</button>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    const addressSection = document.getElementById('what-to-address-section');
+    const addressBody = document.getElementById('what-to-address-body');
+    const addressEmpty = document.getElementById('what-to-address-empty');
+    const addressCount = document.querySelector('[data-address-count]');
+    const addressDoneCount = document.querySelector('[data-address-done-count]');
+
+    // Persists across rebuilds; rows with matching taskId restore their
+    // checked state when the punch list is regenerated.
+    const addressCheckedIds = new Set();
+
+    if (addressBody) {
+      addressBody.addEventListener('change', function (event) {
+        const cb = event.target;
+        if (!cb || !cb.classList || !cb.classList.contains('task-check')) return;
+        const id = cb.dataset.taskId;
+        const tr = cb.closest('tr');
+        if (cb.checked) {
+          addressCheckedIds.add(id);
+          if (tr) tr.classList.add('done');
+        } else {
+          addressCheckedIds.delete(id);
+          if (tr) tr.classList.remove('done');
+        }
+        if (addressDoneCount) {
+          addressDoneCount.textContent = String(
+            addressBody.querySelectorAll('input.task-check:checked').length
+          );
+        }
+        updateConfirmButton();
+      });
+    }
+
+    function updateConfirmButton() {
+      const btn = document.getElementById('confirm-push-btn');
+      if (!btn || !addressBody) return;
+      const total = addressBody.querySelectorAll('tr').length;
+      const done = addressBody.querySelectorAll('input.task-check:checked').length;
+      const allDone = total === 0 || done === total;
+      btn.disabled = !allDone;
+      btn.title = allDone
+        ? 'Push these CC transactions to the Google Sheet.'
+        : 'Tick every item in "What to do in Money Manager" first ('
+          + done + '/' + total + ' done).';
+    }
+
+    function pdfRowParts(tr) {
+      // PDF row layout: [status, tran, post, merchant, amount, mm-note, resolve]
+      const cells = tr.querySelectorAll('td');
+      return {
+        tran: cells[1] ? cells[1].textContent.trim() : '',
+        merchant: cells[3] ? cells[3].textContent.trim() : '',
+        amount: cells[4] ? cells[4].textContent.trim() : '',
+      };
+    }
+
+    function mmRowParts(tr) {
+      // MM row layout: [exclude, date, expense_name, description, amount]
+      const cells = tr.querySelectorAll('td');
+      // Prefer the precise data-amount attribute when present.
+      const dataAmt = tr.dataset && tr.dataset.amount;
+      return {
+        date: cells[1] ? cells[1].textContent.trim() : '',
+        expense: cells[2] ? cells[2].textContent.trim() : '',
+        description: cells[3] ? cells[3].textContent.trim() : '',
+        amount: dataAmt || (cells[4] ? cells[4].textContent.trim() : ''),
+      };
+    }
+
+    function moneyEqual(a, b) {
+      const av = parseFloat(String(a).replace(/,/g, ''));
+      const bv = parseFloat(String(b).replace(/,/g, ''));
+      return Number.isFinite(av) && Number.isFinite(bv) && Math.abs(av - bv) < 0.01;
+    }
+
+    function parseAmount(s) {
+      const v = parseFloat(String(s).replace(/,/g, ''));
+      return Number.isFinite(v) ? v : 0;
+    }
+
+    function buildLinkRow(tr, unusedId) {
+      const pdf = pdfRowParts(tr);
+      const ccValue = pdf.tran + ' · ' + pdf.merchant + ' · ' + pdf.amount;
+      const ccAmount = parseAmount(pdf.amount);
+      const mmRow = document.querySelector('tr[data-unused-id="' + unusedId + '"]');
+      let mmEntry = '<span class="muted">linked entry missing</span>';
+      let actionLabel = 'Update';
+      let actionClass = 'inaccurate';
+      let delta = { type: 'update', cc: ccAmount, mm: 0 };
+      if (mmRow) {
+        const m = mmRowParts(mmRow);
+        const desc = m.description && m.description !== '—' ? ' · ' + m.description : '';
+        const mmAmount = parseAmount(m.amount);
+        if (moneyEqual(m.amount, pdf.amount)) {
+          actionLabel = 'Match';
+          actionClass = 'matched';
+          mmEntry = m.date + ' · ' + m.expense + desc +
+            ' <span class="muted">(' + m.amount + ' — already matches)</span>';
+          delta = { type: 'match', cc: ccAmount, mm: mmAmount };
+        } else {
+          mmEntry = m.date + ' · ' + m.expense + desc +
+            ' <span class="muted">(was ' + m.amount + ')</span>';
+          delta = { type: 'update', cc: ccAmount, mm: mmAmount };
+        }
+      }
+      return {
+        actionLabel: actionLabel,
+        actionClass: actionClass,
+        mmEntry: mmEntry,
+        ccValue: ccValue,
+        delta: delta,
+        taskId: 'update-' + tr.dataset.rowId + '-' + unusedId,
+      };
+    }
+
+    function rebuildAddressList() {
+      if (!addressBody || !addressSection) return;
+      addressBody.innerHTML = '';
+      const rows = [];
+
+      document.querySelectorAll('input.resolve-check:checked').forEach(function (cb) {
+        const tr = cb.closest('tr[data-row-id]');
+        if (!tr) return;
+        const pdf = pdfRowParts(tr);
+        const ccValue = pdf.tran + ' · ' + pdf.merchant + ' · ' + pdf.amount;
+
+        if (cb.dataset.mode === 'add') {
+          rows.push({
+            actionLabel: 'Add', actionClass: 'missing',
+            mmEntry: '<span class="muted">no MM entry yet — add manually</span>',
+            ccValue: ccValue,
+            delta: { type: 'add', cc: parseAmount(pdf.amount), mm: 0 },
+            taskId: 'add-' + tr.dataset.rowId,
+          });
+        } else if (cb.dataset.mode === 'link') {
+          rows.push(buildLinkRow(tr, cb.dataset.resolvesUnused));
+        }
+      });
+
+      // Manual picks from the dropdown — same shape as a link-mode candidate.
+      document.querySelectorAll('select.manual-pick').forEach(function (s) {
+        if (!s.value) return;
+        const tr = s.closest('tr[data-row-id]');
+        if (!tr) return;
+        rows.push(buildLinkRow(tr, s.value));
+      });
+
+      // Explicit exclusions — user-flagged Remove actions. Only entries the
+      // user has explicitly ticked "Exclude" on become Remove punch-list rows.
+      // Leftover unmatched MM entries are NOT auto-removed: the user reviews
+      // them in the Money Manager CC entries table and decides per-entry.
+      document.querySelectorAll('tr[data-unused-id].excluded').forEach(function (mm) {
+        const m = mmRowParts(mm);
+        const desc = m.description && m.description !== '—' ? ' · ' + m.description : '';
+        rows.push({
+          actionLabel: 'Remove',
+          actionClass: 'missing',
+          mmEntry: m.date + ' · ' + m.expense + desc +
+            ' <span class="muted">(' + m.amount + ')</span>',
+          ccValue: '<span class="muted">excluded — not on this bill</span>',
+          delta: { type: 'remove', cc: 0, mm: parseAmount(m.amount) },
+          taskId: 'remove-' + mm.dataset.unusedId,
+        });
+      });
+
+      let doneCount = 0;
+      rows.forEach(function (r) {
+        const isDone = addressCheckedIds.has(r.taskId);
+        if (isDone) doneCount++;
+        const tr = document.createElement('tr');
+        if (isDone) tr.classList.add('done');
+        tr.innerHTML =
+          '<td class="col-action"><span class="row-status ' + r.actionClass + '">' + r.actionLabel + '</span></td>' +
+          '<td>' + r.mmEntry + '</td>' +
+          '<td>' + r.ccValue + '</td>' +
+          '<td class="col-task-check">' +
+            '<input type="checkbox" class="task-check" data-task-id="' + r.taskId + '"' +
+              (isDone ? ' checked' : '') + ' aria-label="Mark this change applied">' +
+          '</td>';
+        addressBody.appendChild(tr);
+      });
+
+      if (addressEmpty) addressEmpty.hidden = rows.length > 0;
+      if (addressCount) addressCount.textContent = String(rows.length);
+      if (addressDoneCount) addressDoneCount.textContent = String(doneCount);
+
+      updateVerification(rows);
+      updateConfirmButton();
+    }
+
+    function fmtMoney(n) {
+      return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function fmtSigned(n) {
+      const s = (n >= 0 ? '+' : '') + fmtMoney(n);
+      return s.replace('+-', '-');
+    }
+
+    function updateVerification(rows) {
+      const section = document.getElementById('verification-section');
+      if (!section) return;
+
+      const ccCount = parseInt(section.dataset.ccCount, 10) || 0;
+      const ccTotal = parseAmount(section.dataset.ccTotal);
+      const mmCount = parseInt(section.dataset.mmCount, 10) || 0;
+      const mmTotal = parseAmount(section.dataset.mmTotal);
+
+      // Each user action becomes a delta against the full MM baseline.
+      // Excluded entries already appear in `rows` as Remove deltas, so we
+      // do NOT subtract them from the baseline — that would double-count.
+      let addCount = 0, addAmt = 0;
+      let removeCount = 0, removeAmt = 0;
+      let updateNet = 0;
+
+      rows.forEach(function (r) {
+        if (!r.delta) return;
+        switch (r.delta.type) {
+          case 'add':    addCount++;    addAmt    += r.delta.cc; break;
+          case 'remove': removeCount++; removeAmt += r.delta.mm; break;
+          case 'update': updateNet += (r.delta.cc - r.delta.mm); break;
+          // 'match': no change
+        }
+      });
+
+      const projectedCount = mmCount + addCount - removeCount;
+      const projectedTotal = mmTotal + addAmt + updateNet - removeAmt;
+      const countDelta = projectedCount - mmCount;
+      const totalDelta = projectedTotal - mmTotal;
+      // Sign convention: positive diff = MM exceeds CC (need to remove);
+      // negative diff = MM short of CC (need to add).
+      const diff = +(projectedTotal - ccTotal).toFixed(2);
+      const countMatches = projectedCount === ccCount;
+      const totalMatches = Math.abs(diff) < 0.01;
+      const allOk = countMatches && totalMatches;
+
+      const $ = function (sel) { return section.querySelector(sel); };
+      $('[data-projected-count]').textContent = projectedCount + ' / ' + ccCount + ' (CC)';
+      $('[data-projected-count-delta]').textContent =
+        (countDelta === 0 ? 'no change' : (countDelta > 0 ? '+' : '') + countDelta) +
+        (countMatches ? ' · matches CC ✓' : ' · differs from CC');
+
+      $('[data-projected-total]').textContent = fmtMoney(projectedTotal) + ' / ' + fmtMoney(ccTotal) + ' (CC)';
+      $('[data-projected-total-delta]').textContent =
+        (Math.abs(totalDelta) < 0.01 ? 'no change' : fmtSigned(totalDelta)) +
+        (totalMatches ? ' · matches CC ✓' : ' · differs from CC');
+
+      $('[data-projected-diff]').textContent = (diff >= 0 ? '+' : '') + fmtMoney(diff);
+      const status = $('[data-projected-status]');
+      status.classList.remove('ok', 'warn', 'danger');
+      status.classList.add(allOk ? 'ok' : 'danger');
+      let statusText;
+      if (allOk) {
+        statusText = 'Reconciled — safe to push to sheet.';
+      } else if (diff > 0) {
+        statusText = 'MM has ' + fmtMoney(diff) + ' more than CC — exclude or update entries to reconcile.';
+      } else {
+        statusText = 'MM short by ' + fmtMoney(Math.abs(diff)) + ' — add or update entries to reconcile.';
+      }
+      $('[data-projected-status-text]').textContent = statusText;
+    }
+
+    function recomputeAll() {
+      // 1. Excluded set first, since it forces some checks/selects to clear.
+      const excludedIds = new Set();
+      document.querySelectorAll('input.mm-exclude:checked').forEach(function (c) {
+        excludedIds.add(c.dataset.unusedId);
+      });
+
+      // 2. Force-clear any candidate / manual-pick targeting an excluded id.
+      document.querySelectorAll('input.resolve-check[data-mode="link"]:checked').forEach(function (c) {
+        if (excludedIds.has(c.dataset.resolvesUnused)) c.checked = false;
+      });
+      document.querySelectorAll('select.manual-pick').forEach(function (s) {
+        if (s.value && excludedIds.has(s.value)) s.value = '';
+      });
+
+      // 3. Set of MM ids currently claimed by some PDF row.
+      const claimedIds = new Set();
+      document.querySelectorAll('input.resolve-check[data-mode="link"]:checked').forEach(function (c) {
+        if (c.dataset.resolvesUnused !== undefined) {
+          claimedIds.add(c.dataset.resolvesUnused);
+        }
+      });
+      document.querySelectorAll('select.manual-pick').forEach(function (s) {
+        if (s.value) claimedIds.add(s.value);
+      });
+
+      // 4. Visual state on MM rows: 'excluded' wins over 'resolved'.
+      document.querySelectorAll('tr[data-unused-id]').forEach(function (mm) {
+        const id = mm.dataset.unusedId;
+        const isExcluded = excludedIds.has(id);
+        mm.classList.toggle('excluded', isExcluded);
+        mm.classList.toggle('resolved', !isExcluded && claimedIds.has(id));
+      });
+
+      // 5. Disable candidate checkboxes whose target is excluded OR claimed
+      //    elsewhere. Self-checked candidates stay enabled so users can untick.
+      document.querySelectorAll('input.resolve-check[data-mode="link"]').forEach(function (c) {
+        const id = c.dataset.resolvesUnused;
+        if (id === undefined) return;
+        if (excludedIds.has(id)) {
+          c.disabled = true;
+        } else {
+          c.disabled = !c.checked && claimedIds.has(id);
+        }
+      });
+
+      // 6. Disable manual-pick options that are excluded or claimed elsewhere.
+      document.querySelectorAll('select.manual-pick').forEach(function (s) {
+        Array.from(s.options).forEach(function (opt) {
+          if (!opt.value) return;
+          if (excludedIds.has(opt.value)) {
+            opt.disabled = true;
+          } else {
+            opt.disabled = opt.value !== s.value && claimedIds.has(opt.value);
+          }
+        });
+      });
+
+      // 7. PDF row resolved if matched (already done by the analyser),
+      //    OR any resolve-check is ticked, OR manual-pick has a value.
+      document.querySelectorAll('tr[data-row-id]').forEach(function (tr) {
+        if (tr.dataset.status === 'matched') {
+          tr.classList.add('resolved');
+          return;
+        }
+        const checked = tr.querySelector('input.resolve-check:checked') !== null;
+        const select = tr.querySelector('select.manual-pick');
+        const manualPicked = !!(select && select.value);
+        tr.classList.toggle('resolved', checked || manualPicked);
+      });
+
+      // 8. CC count tracker + "all resolved" banner.
+      const ccTotal = document.querySelectorAll('tr[data-row-id]').length;
+      const ccResolved = document.querySelectorAll('tr[data-row-id].resolved').length;
+      const ccCountEl = document.querySelector('[data-cc-resolved-count]');
+      if (ccCountEl) ccCountEl.textContent = String(ccResolved);
+      const banner = document.getElementById('all-resolved-banner');
+      if (banner) banner.hidden = !(ccTotal > 0 && ccResolved === ccTotal);
+
+      // 9. MM count tracker + "all addressed" banner.
+      // The denominator is in-cycle entries only; extended entries are
+      // optional (revealed via "Show all MM data") and don't gate the
+      // banner.
+      const mmInCycle = document.querySelectorAll('tr[data-unused-id][data-in-cycle="1"]').length;
+      const mmAddressed = document.querySelectorAll(
+        'tr[data-unused-id][data-in-cycle="1"].resolved, ' +
+        'tr[data-unused-id][data-in-cycle="1"].excluded'
+      ).length;
+      const mmCountEl = document.querySelector('[data-mm-addressed-count]');
+      const mmCycleCountEl = document.querySelector('[data-mm-cycle-count]');
+      if (mmCountEl) mmCountEl.textContent = String(mmAddressed);
+      if (mmCycleCountEl) mmCycleCountEl.textContent = String(mmInCycle);
+      const mmBanner = document.getElementById('mm-all-addressed-banner');
+      if (mmBanner) mmBanner.hidden = !(mmInCycle > 0 && mmAddressed === mmInCycle);
+
+      rebuildAddressList();
+      recomputeShoulders();
+      updateRowDetails();
+    }
+
+    function updateRowDetails() {
+      // For non-matched PDF rows, mirror the currently linked MM entry
+      // (or the "Add" intent) into the detail cell. Matched rows keep the
+      // server-rendered detail since the matched MM entry is no longer in
+      // the visible MM table.
+      document.querySelectorAll('tr[data-row-id]').forEach(function (tr) {
+        if (tr.dataset.status === 'matched') return;
+        const detailRow = document.querySelector(
+          'tr.row-detail[data-detail-for="' + tr.dataset.rowId + '"]'
+        );
+        if (!detailRow) return;
+        const cell = detailRow.querySelector('[data-detail-content]');
+        if (!cell) return;
+
+        let mmRow = null;
+        const linked = tr.querySelector('input.resolve-check[data-mode="link"]:checked');
+        if (linked) {
+          mmRow = document.querySelector(
+            'tr[data-unused-id="' + linked.dataset.resolvesUnused + '"]'
+          );
+        }
+        if (!mmRow) {
+          const sel = tr.querySelector('select.manual-pick');
+          if (sel && sel.value) {
+            mmRow = document.querySelector('tr[data-unused-id="' + sel.value + '"]');
+          }
+        }
+
+        if (mmRow) {
+          const m = mmRowParts(mmRow);
+          const desc = m.description && m.description !== '—'
+            ? '<br><small class="muted">' + m.description + '</small>'
+            : '';
+          cell.innerHTML =
+            '<strong>MM:</strong> ' + m.date + ' · <span class="amount-inline">' + m.amount + '</span>' +
+            (m.expense ? ' · ' + m.expense : '') + desc;
+          return;
+        }
+
+        const addChecked = tr.querySelector('input.resolve-check[data-mode="add"]:checked');
+        if (addChecked) {
+          cell.innerHTML = '<span class="muted">To be added manually — no MM entry linked.</span>';
+        } else {
+          cell.innerHTML = '<span class="muted">No MM entry linked yet.</span>';
+        }
+      });
+    }
+
+    function recomputeShoulders() {
+      const list = document.getElementById('shoulder-list');
+      const empty = document.getElementById('shoulder-empty');
+      if (!list || !empty) return;
+
+      const totals = new Map();
+      const breakdowns = new Map();   // name -> array of contributing tx records
+      function add(amount, names, pdf, mm) {
+        if (!Number.isFinite(amount) || amount <= 0 || names.length === 0) return;
+        const share = amount / names.length;
+        names.forEach(function (n) {
+          totals.set(n, (totals.get(n) || 0) + share);
+          if (!breakdowns.has(n)) breakdowns.set(n, []);
+          breakdowns.get(n).push({
+            tran: pdf.tran,
+            merchant: pdf.merchant,
+            amount: amount,
+            share: share,
+            cosharers: names.filter(function (x) { return x !== n; }),
+            mm: mm,
+          });
+        });
+      }
+      function mentions(s) {
+        const matches = String(s || '').match(/@\w+/g) || [];
+        return matches.map(function (t) { return t.slice(1); });
+      }
+      function matchedMmFromTr(tr) {
+        if (!tr.dataset.matchedMmPeriod && !tr.dataset.matchedMmDescription) return null;
+        return {
+          date: tr.dataset.matchedMmPeriod || '',
+          expense: tr.dataset.matchedMmExpense || '',
+          description: tr.dataset.matchedMmDescription || '',
+          amount: tr.dataset.matchedMmAmount || '',
+        };
+      }
+
+      // Server-decided matched rows.
+      document.querySelectorAll('tr[data-row-id][data-status="matched"]').forEach(function (tr) {
+        const desc = tr.dataset.matchedMmDescription || '';
+        const pdf = pdfRowParts(tr);
+        add(parseAmount(pdf.amount), mentions(desc), pdf, matchedMmFromTr(tr));
+      });
+
+      // User-resolved via candidate checkbox.
+      document.querySelectorAll('input.resolve-check[data-mode="link"]:checked').forEach(function (cb) {
+        const tr = cb.closest('tr[data-row-id]');
+        const mmRow = document.querySelector('tr[data-unused-id="' + cb.dataset.resolvesUnused + '"]');
+        if (!tr || !mmRow) return;
+        const pdf = pdfRowParts(tr);
+        add(parseAmount(pdf.amount), mentions(mmRowParts(mmRow).description), pdf, mmRowParts(mmRow));
+      });
+
+      // User-resolved via manual-pick dropdown.
+      document.querySelectorAll('select.manual-pick').forEach(function (s) {
+        if (!s.value) return;
+        const tr = s.closest('tr[data-row-id]');
+        const mmRow = document.querySelector('tr[data-unused-id="' + s.value + '"]');
+        if (!tr || !mmRow) return;
+        const pdf = pdfRowParts(tr);
+        add(parseAmount(pdf.amount), mentions(mmRowParts(mmRow).description), pdf, mmRowParts(mmRow));
+      });
+
+      // Mirror the totals into the hidden form field so the confirm-push
+      // step can write a side-table on the destination sheet.
+      const shoulderField = document.getElementById('shoulder-data-field');
+      if (shoulderField) {
+        const arr = Array.from(totals.entries()).map(function (entry) {
+          return [entry[0], +entry[1].toFixed(2)];
+        });
+        shoulderField.value = JSON.stringify(arr);
+      }
+
+      list.innerHTML = '';
+      if (totals.size === 0) {
+        empty.hidden = false;
+        return;
+      }
+      empty.hidden = true;
+      Array.from(totals.entries())
+        .sort(function (a, b) { return b[1] - a[1]; })
+        .forEach(function (entry) {
+          const name = entry[0];
+          const total = entry[1];
+          const items = breakdowns.get(name) || [];
+          const li = document.createElement('li');
+          li.className = 'shoulder-item';
+
+          let breakdownHtml = '';
+          items.forEach(function (it) {
+            const isSplit = it.cosharers.length > 0;
+            const splitTag = isSplit
+              ? ' <small class="muted">(' + it.cosharers.map(function (n) { return '@' + n; }).join(', ') + ')</small>'
+              : '';
+            const amountCell = isSplit
+              ? fmtMoney(it.share) + ' <small class="muted">of ' + fmtMoney(it.amount) + '</small>'
+              : fmtMoney(it.amount);
+
+            let mmCell = '<strong>MM:</strong> <span class="muted">TBA — to be resolved</span>';
+            if (it.mm) {
+              const exp = it.mm.expense ? ' · ' + it.mm.expense : '';
+              const desc = it.mm.description && it.mm.description !== '—'
+                ? ' · ' + it.mm.description
+                : '';
+              mmCell = '<strong>MM:</strong> ' + it.mm.date + exp + desc;
+            }
+
+            breakdownHtml +=
+              '<li>' +
+                '<span class="bd-tran">' + it.tran + '</span>' +
+                '<span class="bd-merchant">' + it.merchant + splitTag + '</span>' +
+                '<span class="bd-amount">' + amountCell + '</span>' +
+                '<small class="bd-meta">' + mmCell + '</small>' +
+              '</li>';
+          });
+
+          li.innerHTML =
+            '<details class="shoulder-details">' +
+              '<summary class="shoulder-summary-row">' +
+                '<span class="shoulder-name">@' + name + '</span>' +
+                '<span class="shoulder-meta muted">' + items.length + ' tx</span>' +
+                '<span class="shoulder-amount">' + fmtMoney(total) + '</span>' +
+              '</summary>' +
+              '<ul class="shoulder-breakdown">' + breakdownHtml + '</ul>' +
+            '</details>';
+          list.appendChild(li);
+        });
+    }
+
+    function clearOtherResolvers(tr, except) {
+      tr.querySelectorAll('input.resolve-check').forEach(function (other) {
+        if (other !== except) other.checked = false;
+      });
+      tr.querySelectorAll('select.manual-pick').forEach(function (other) {
+        if (other !== except) other.value = '';
+      });
+    }
+
+    document.querySelectorAll('input.resolve-check').forEach(function (cb) {
+      cb.addEventListener('change', function (event) {
+        const tr = event.target.closest('tr[data-row-id]');
+        if (tr && event.target.checked) {
+          clearOtherResolvers(tr, event.target);
+        }
+        recomputeAll();
+      });
+    });
+
+    document.querySelectorAll('select.manual-pick').forEach(function (sel) {
+      sel.addEventListener('change', function (event) {
+        const tr = event.target.closest('tr[data-row-id]');
+        if (tr && event.target.value) {
+          clearOtherResolvers(tr, event.target);
+        }
+        recomputeAll();
+      });
+    });
+
+    document.querySelectorAll('input.mm-exclude').forEach(function (cb) {
+      cb.addEventListener('change', function () {
+        recomputeAll();
+      });
+    });
+
+    // "Show all MM data" toggle reveals entries outside the strict cycle.
+    const showAllToggle = document.getElementById('mm-show-all');
+    if (showAllToggle) {
+      showAllToggle.addEventListener('change', function () {
+        const reveal = showAllToggle.checked;
+        document.querySelectorAll('.mm-table tr.mm-extended').forEach(function (tr) {
+          tr.hidden = !reveal;
+        });
+      });
+    }
+
+    // Initial sync — populates shoulder summary, banners, etc. from
+    // server-rendered matched-row data without requiring user input.
+    recomputeAll();
+
+    // Per-row "show MM details" toggle.
+    document.querySelectorAll('button.row-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function (event) {
+        event.stopPropagation();
+        const rowId = btn.dataset.toggleRow;
+        const detail = document.querySelector('tr.row-detail[data-detail-for="' + rowId + '"]');
+        if (!detail) return;
+        const opening = detail.hidden;
+        detail.hidden = !opening;
+        btn.textContent = opening ? '▾' : '▸';
+        btn.setAttribute('aria-expanded', String(opening));
+      });
+    });
+
+    // Help modal
+    const helpDlg = document.getElementById('help-dialog');
+    document.querySelectorAll('[data-help-open]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (helpDlg && typeof helpDlg.showModal === 'function') {
+          helpDlg.showModal();
+        }
+      });
+    });
+    document.querySelectorAll('[data-help-close]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (helpDlg) helpDlg.close();
+      });
+    });
+    if (helpDlg) {
+      helpDlg.addEventListener('click', function (e) {
+        // Click on backdrop (the dialog itself, not its content) closes.
+        if (e.target === helpDlg) helpDlg.close();
+      });
+    }
+  })();
+</script>
 {% endblock %}
