@@ -1,0 +1,401 @@
+{% extends "base.html" %}
+{% block title %}Analysis · Money Manager{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / <a href="/tools/money-manager">money-manager</a> / analysis</div>
+  <div class="page-header-row">
+    <h1>Money Manager Analysis</h1>
+    <a class="btn" href="/tools/money-manager">Upload another</a>
+  </div>
+  <p class="muted">
+    {% if result.monthly %}
+      Range: <strong>{{ result.monthly[0].label }}</strong> → <strong>{{ result.monthly[-1].label }}</strong> ·
+    {% endif %}
+    {{ result.total_income_count + result.total_expense_count }} entries analyzed
+  </p>
+</div>
+
+{% set balance = result.balance %}
+<div class="summary">
+  <div class="stat ok">
+    <div class="k">Total Income</div>
+    <div class="v">PHP {{ "{:,.2f}".format(result.total_income) }}</div>
+    <div class="muted" style="font-size:0.72rem;margin-top:0.15rem;">{{ result.total_income_count }} entries</div>
+  </div>
+  <div class="stat danger">
+    <div class="k">Total Expense</div>
+    <div class="v">PHP {{ "{:,.2f}".format(result.total_expense) }}</div>
+    <div class="muted" style="font-size:0.72rem;margin-top:0.15rem;">{{ result.total_expense_count }} entries</div>
+  </div>
+  <div class="stat {% if balance >= 0 %}ok{% else %}danger{% endif %}">
+    <div class="k">Balance</div>
+    <div class="v">PHP {{ "{:,.2f}".format(balance) }}</div>
+    <div class="muted" style="font-size:0.72rem;margin-top:0.15rem;">{{ "income − expense" }}</div>
+  </div>
+  <div class="stat">
+    <div class="k">Avg expense / month</div>
+    {% set m = result.monthly | length %}
+    <div class="v">PHP {{ "{:,.2f}".format(result.total_expense / m if m else 0) }}</div>
+    <div class="muted" style="font-size:0.72rem;margin-top:0.15rem;">across {{ m }} month{{ '' if m == 1 else 's' }}</div>
+  </div>
+</div>
+
+<section class="chart-grid">
+  <div class="chart-card chart-card-wide">
+    <div class="chart-card-head">
+      <h2>Monthly Income vs Expense</h2>
+      <span class="muted">Net balance per month is the line on top of the bars.</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-monthly"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Expense by Category</h2>
+      <span class="muted">Top 8 + Other</span>
+    </div>
+    <div class="chart-wrap chart-wrap-donut"><canvas id="chart-category"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Expense Entries by Account</h2>
+      <span class="muted">Number of transactions per payment account</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-accounts"></canvas></div>
+  </div>
+
+  <div class="chart-card chart-card-wide">
+    <div class="chart-card-head">
+      <h2>Top 10 Expense Merchants by Amount</h2>
+      <span class="muted">Where the most money went</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-top-amount"></canvas></div>
+  </div>
+
+  <div class="chart-card chart-card-wide">
+    <div class="chart-card-head">
+      <h2>Top 15 Expense Merchants by Visit Count</h2>
+      <span class="muted">Where you transact most often</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-top-count"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Top Income Sources</h2>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-income"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Top Grocery Stores by Amount</h2>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-grocery"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Top Coffee Shops</h2>
+      <span class="muted">By visit count</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-coffee"></canvas></div>
+  </div>
+
+  <div class="chart-card">
+    <div class="chart-card-head">
+      <h2>Top Fast Foods</h2>
+      <span class="muted">By visit count</span>
+    </div>
+    <div class="chart-wrap"><canvas id="chart-fastfood"></canvas></div>
+  </div>
+</section>
+
+<section class="section-block">
+  <div class="section-heading"><h2>Special Cases</h2></div>
+  <div class="mini-grid">
+    <div class="mini-stat"><div class="k">Shopee orders</div><div class="v">{{ result.special_cases.shopee_count }}</div></div>
+    <div class="mini-stat"><div class="k">Lazada orders</div><div class="v">{{ result.special_cases.lazada_count }}</div></div>
+    <div class="mini-stat"><div class="k">Amazon orders</div><div class="v">{{ result.special_cases.amazon_count }}</div></div>
+    <div class="mini-stat"><div class="k">Foodpanda</div><div class="v">{{ result.special_cases.foodpanda_count }}</div></div>
+    <div class="mini-stat"><div class="k">GrabFood</div><div class="v">{{ result.special_cases.grab_food_count }}</div></div>
+    <div class="mini-stat"><div class="k">GrabCar</div><div class="v">{{ result.special_cases.grab_car_count }}</div></div>
+    <div class="mini-stat"><div class="k">7-Eleven</div><div class="v">{{ result.special_cases.seven_eleven_count }}</div></div>
+  </div>
+</section>
+
+<section class="section-block">
+  <div class="section-heading">
+    <h2>Tagged Expenses</h2>
+    <span class="muted">Every <code>@Name</code> mention in a description, totalled. Each mention adds the full row amount.</span>
+  </div>
+  {% if result.tagged_mentions %}
+    <div class="mini-grid">
+      {% for tag in result.tagged_mentions %}
+        <div class="mini-stat">
+          <div class="k">@{{ tag.name }}</div>
+          <div class="v">PHP {{ "{:,.2f}".format(tag.amount) }}</div>
+          <div class="muted" style="font-size:0.7rem;">{{ tag.count }} entr{{ 'y' if tag.count == 1 else 'ies' }}</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <p class="muted">No <code>@Name</code> tags found in this export.</p>
+  {% endif %}
+</section>
+
+<details class="data-dump">
+  <summary>Top 30 food establishments (table)</summary>
+  <table>
+    <thead><tr><th>Establishment</th><th>Visits</th><th class="amount">Total</th><th>First instance</th></tr></thead>
+    <tbody>
+      {% for e in result.top_food %}
+        <tr><td>{{ e.name }}</td><td>{{ e.count }}</td><td class="amount">PHP {{ "{:,.2f}".format(e.total) }}</td><td>{{ e.first_instance }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<details class="data-dump">
+  <summary>Top 30 expense merchants (table)</summary>
+  <table>
+    <thead><tr><th>Merchant</th><th>Visits</th><th class="amount">Total</th><th>First instance</th></tr></thead>
+    <tbody>
+      {% for e in result.top_expense_by_count %}
+        <tr><td>{{ e.name }}</td><td>{{ e.count }}</td><td class="amount">PHP {{ "{:,.2f}".format(e.total) }}</td><td>{{ e.first_instance }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</details>
+
+<details class="data-dump">
+  <summary>Shopee orders ({{ result.shopee_orders | length }})</summary>
+  <p class="dump-text">{{ result.shopee_orders | join(', ') or '—' }}</p>
+</details>
+<details class="data-dump">
+  <summary>Lazada orders ({{ result.lazada_orders | length }})</summary>
+  <p class="dump-text">{{ result.lazada_orders | join(', ') or '—' }}</p>
+</details>
+<details class="data-dump">
+  <summary>Amazon orders ({{ result.amazon_orders | length }})</summary>
+  <p class="dump-text">{{ result.amazon_orders | join(', ') or '—' }}</p>
+</details>
+
+<script id="mm-payload" type="application/json">
+{
+  "monthly": [
+    {% for m in result.monthly %}
+      {"label": {{ m.label | tojson }}, "income": {{ m.income }}, "expense": {{ m.expense }}, "net": {{ m.net }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "category": [
+    {% for name, amount in result.expense_by_category %}
+      {"name": {{ name | tojson }}, "amount": {{ amount }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "accounts": [
+    {% for name, count in result.expense_accounts %}
+      {"name": {{ name | tojson }}, "count": {{ count }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "top_amount": [
+    {% for e in result.top_expense_by_amount %}
+      {"name": {{ e.name | tojson }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "top_count": [
+    {% for e in result.top_expense_by_count[:15] %}
+      {"name": {{ e.name | tojson }}, "count": {{ e.count }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "income": [
+    {% for e in result.top_income_sources %}
+      {"name": {{ e.name | tojson }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "grocery": [
+    {% for e in result.top_grocery_by_amount %}
+      {"name": {{ e.name | tojson }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "coffee": [
+    {% for e in result.top_coffee_shops %}
+      {"name": {{ e.name | tojson }}, "count": {{ e.count }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ],
+  "fastfood": [
+    {% for e in result.top_fast_foods %}
+      {"name": {{ e.name | tojson }}, "count": {{ e.count }}, "total": {{ e.total }}}{{ "," if not loop.last }}
+    {% endfor %}
+  ]
+}
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+<script>
+  (function () {
+    const payload = JSON.parse(document.getElementById('mm-payload').textContent);
+
+    // Theme tokens (matches styles.css)
+    const css = getComputedStyle(document.documentElement);
+    const fg = css.getPropertyValue('--fg').trim() || '#e6e8ee';
+    const muted = css.getPropertyValue('--muted').trim() || '#8a93a6';
+    const border = css.getPropertyValue('--border').trim() || '#262c3a';
+    const accent = css.getPropertyValue('--accent').trim() || '#7c5cff';
+    const ok = css.getPropertyValue('--ok').trim() || '#3ddc97';
+    const warn = css.getPropertyValue('--warn').trim() || '#ffc857';
+    const danger = css.getPropertyValue('--danger').trim() || '#ff6b6b';
+    const info = css.getPropertyValue('--info').trim() || '#5ec2ff';
+
+    // Mixed palette for categorical charts.
+    const palette = [
+      accent, ok, warn, danger, info,
+      '#a78bfa', '#f97316', '#f472b6', '#22d3ee', '#84cc16',
+      '#fb7185', '#60a5fa', '#facc15', '#34d399', '#c084fc',
+    ];
+
+    Chart.defaults.color = muted;
+    Chart.defaults.borderColor = border;
+    Chart.defaults.font.family = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+    const fmtPhp = (n) =>
+      'PHP ' + Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const fmtCount = (n) => Number(n).toLocaleString();
+    const tooltipMoney = {
+      callbacks: { label: (ctx) => ctx.dataset.label + ': ' + fmtPhp(ctx.parsed.x ?? ctx.parsed.y ?? ctx.parsed) },
+    };
+
+    function makeMonthly() {
+      const labels = payload.monthly.map((m) => m.label);
+      return new Chart(document.getElementById('chart-monthly'), {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            { label: 'Income', data: payload.monthly.map((m) => m.income), backgroundColor: ok, borderRadius: 4 },
+            { label: 'Expense', data: payload.monthly.map((m) => m.expense), backgroundColor: danger, borderRadius: 4 },
+            {
+              label: 'Net',
+              data: payload.monthly.map((m) => m.net),
+              type: 'line',
+              borderColor: accent,
+              backgroundColor: accent,
+              tension: 0.25,
+              fill: false,
+              pointRadius: 3,
+              borderWidth: 2,
+              yAxisID: 'y',
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            tooltip: { callbacks: { label: (ctx) => ctx.dataset.label + ': ' + fmtPhp(ctx.parsed.y) } },
+            legend: { labels: { color: fg } },
+          },
+          scales: {
+            x: { grid: { color: border }, ticks: { color: muted } },
+            y: {
+              grid: { color: border },
+              ticks: { color: muted, callback: (v) => Number(v).toLocaleString() },
+            },
+          },
+        },
+      });
+    }
+
+    function makeCategory() {
+      const sorted = payload.category.slice().sort((a, b) => b.amount - a.amount);
+      const top = sorted.slice(0, 8);
+      const otherSum = sorted.slice(8).reduce((s, c) => s + c.amount, 0);
+      const labels = top.map((c) => c.name);
+      const data = top.map((c) => c.amount);
+      if (otherSum > 0) {
+        labels.push('Other');
+        data.push(otherSum);
+      }
+      const total = data.reduce((s, v) => s + v, 0);
+      return new Chart(document.getElementById('chart-category'), {
+        type: 'doughnut',
+        data: {
+          labels: labels,
+          datasets: [{ data: data, backgroundColor: palette, borderColor: 'transparent' }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '60%',
+          plugins: {
+            legend: { position: 'right', labels: { color: fg, boxWidth: 12, font: { size: 11 } } },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => {
+                  const pct = total ? ((ctx.parsed / total) * 100).toFixed(1) : '0';
+                  return ctx.label + ': ' + fmtPhp(ctx.parsed) + ' (' + pct + '%)';
+                },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    function makeHorizontalBar(id, items, valueKey, label, color, isMoney) {
+      if (!items.length) {
+        const el = document.getElementById(id);
+        if (el && el.parentNode) {
+          el.parentNode.innerHTML = '<p class="muted" style="text-align:center;padding:2rem 0;">No data.</p>';
+        }
+        return null;
+      }
+      const sorted = items.slice().sort((a, b) => b[valueKey] - a[valueKey]);
+      return new Chart(document.getElementById(id), {
+        type: 'bar',
+        data: {
+          labels: sorted.map((e) => e.name),
+          datasets: [{
+            label: label,
+            data: sorted.map((e) => e[valueKey]),
+            backgroundColor: color,
+            borderRadius: 4,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (ctx) => label + ': ' + (isMoney ? fmtPhp(ctx.parsed.x) : fmtCount(ctx.parsed.x)),
+              },
+            },
+          },
+          scales: {
+            x: {
+              grid: { color: border },
+              ticks: { color: muted, callback: (v) => Number(v).toLocaleString() },
+            },
+            y: { grid: { display: false }, ticks: { color: fg, font: { size: 11 } } },
+          },
+        },
+      });
+    }
+
+    if (payload.monthly.length) makeMonthly();
+    if (payload.category.length) makeCategory();
+    makeHorizontalBar('chart-accounts', payload.accounts, 'count', 'Entries', info, false);
+    makeHorizontalBar('chart-top-amount', payload.top_amount, 'total', 'Total', danger, true);
+    makeHorizontalBar('chart-top-count', payload.top_count, 'count', 'Visits', accent, false);
+    makeHorizontalBar('chart-income', payload.income, 'total', 'Total', ok, true);
+    makeHorizontalBar('chart-grocery', payload.grocery, 'total', 'Total', warn, true);
+    makeHorizontalBar('chart-coffee', payload.coffee, 'count', 'Visits', '#a78bfa', false);
+    makeHorizontalBar('chart-fastfood', payload.fastfood, 'count', 'Visits', '#f97316', false);
+  })();
+</script>
+{% endblock %}

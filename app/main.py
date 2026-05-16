@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.routes import home, cc_analyzer, auth as auth_routes
+from app.routes import home, cc_analyzer, money_manager, auth as auth_routes
 from app.templating import templates
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -34,6 +34,7 @@ app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 app.include_router(home.router)
 app.include_router(auth_routes.router)
 app.include_router(cc_analyzer.router)
+app.include_router(money_manager.router)
 
 
 @app.exception_handler(StarletteHTTPException)

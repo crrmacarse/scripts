@@ -778,3 +778,97 @@ details.help {
 details.help summary { cursor: pointer; color: var(--muted); }
 details.help[open] summary { color: var(--fg); margin-bottom: 0.5rem; }
 details.help ul { margin: 0.25rem 0 0 1.1rem; padding: 0; }
+
+/* Money Manager analyzer */
+.chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin: 1.5rem 0;
+}
+.chart-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+.chart-card-wide { grid-column: 1 / -1; }
+.chart-card-head {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-bottom: 0.25rem;
+}
+.chart-card-head h2 { font-size: 1rem; margin: 0; }
+.chart-card-head .muted { font-size: 0.78rem; }
+.chart-wrap {
+  position: relative;
+  height: 340px;
+  width: 100%;
+}
+.chart-wrap-donut { height: 300px; }
+@media (max-width: 720px) {
+  .chart-grid { grid-template-columns: 1fr; }
+  .chart-card-wide { grid-column: auto; }
+}
+
+.section-block { margin: 1.75rem 0; }
+
+.mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.6rem;
+}
+.mini-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+}
+.mini-stat .k { color: var(--muted); font-size: 0.74rem; }
+.mini-stat .v { font-size: 1rem; font-weight: 600; margin-top: 0.1rem; font-variant-numeric: tabular-nums; }
+
+details.data-dump {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.65rem 1rem;
+  margin: 0.5rem 0;
+}
+details.data-dump summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+details.data-dump[open] summary { color: var(--fg); margin-bottom: 0.6rem; }
+details.data-dump table {
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+.dump-text {
+  font-size: 0.82rem;
+  line-height: 1.6;
+  color: var(--muted);
+  word-break: break-word;
+  margin: 0;
+}
+
+.schema-table {
+  width: 100%;
+  margin-top: 0.5rem;
+  font-size: 0.82rem;
+}
+.schema-table th, .schema-table td {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.82rem;
+}
+.schema-table code {
+  background: var(--surface-2);
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  font-size: 0.82em;
+}

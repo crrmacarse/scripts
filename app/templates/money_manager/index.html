@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Money Manager Analyzer · tools.crrm.dev{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="crumbs"><a href="/">tools</a> / money-manager</div>
+  <div class="page-header-row">
+    <h1>Money Manager Analyzer</h1>
+    <button type="button" class="btn btn-ghost help-trigger" data-help-open>Required xlsx shape</button>
+  </div>
+  <p class="muted">Upload your Money Manager xlsx export and get a visual breakdown of where your money goes — top merchants, monthly trend, category split, food / coffee / grocery, and shopping habits.</p>
+</div>
+
+{% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+{% endif %}
+
+<details class="help">
+  <summary>How it works</summary>
+  <ul>
+    <li>Upload an xlsx exported from the Money Manager app.</li>
+    <li>The analyzer aggregates income / expense and slices it by month, category, account, merchant, and a few special-case merchants (Shopee, Lazada, 711, etc.).</li>
+    <li>Nothing leaves your browser session — the file is parsed in memory and discarded.</li>
+    <li>The xlsx <strong>must</strong> follow the expected shape. Click <em>Required xlsx shape</em> above to see the column list.</li>
+  </ul>
+</details>
+
+<div class="card">
+  <form method="post" action="/tools/money-manager/analyze" enctype="multipart/form-data">
+    <div class="form-grid">
+      <label class="full">
+        <span>Money Manager xlsx export</span>
+        <input
+          type="file"
+          name="mm_file"
+          accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          required
+        />
+      </label>
+    </div>
+    <div class="actions">
+      <button type="submit" class="btn btn-primary">Analyze</button>
+      <a class="btn" href="/">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<dialog id="help-dialog" class="help-dialog">
+  <button type="button" class="help-close" data-help-close aria-label="Close help">×</button>
+  <h2>Required xlsx shape</h2>
+
+  <section class="help-section">
+    <p>The analyzer expects an xlsx export from the <strong>Money Manager</strong> app with a header row on row 1 and these columns (exact names, any order):</p>
+    <table class="schema-table">
+      <thead>
+        <tr><th>Column</th><th>Type</th><th>Used for</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>Period</code></td><td>date</td><td>Month grouping &amp; "first instance" timestamps</td></tr>
+        <tr><td><code>Accounts</code></td><td>text</td><td>Expense account breakdown</td></tr>
+        <tr><td><code>Category</code></td><td>text</td><td>Category pie + Food/Grocery/Transport rules</td></tr>
+        <tr><td><code>Subcategory</code></td><td>text</td><td>Coffee-shop detection (<code>Cafe Hopping</code>, <code>Grab</code>, <code>Foodpanda</code>)</td></tr>
+        <tr><td><code>Amount</code></td><td>number</td><td>Totals &amp; all aggregations</td></tr>
+        <tr><td><code>Income/Expense</code></td><td>text</td><td>Must be <code>Exp.</code> or <code>Income</code></td></tr>
+        <tr><td><code>Note</code></td><td>text</td><td>Merchant / source name (e.g. <code>Starbucks</code>, <code>GrabCar</code>, <code>711 SM</code>)</td></tr>
+        <tr><td><code>Description</code></td><td>text</td><td>Free text; <code>@Name</code> tags split shoulder costs</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="help-section">
+    <h3>Conventions the analyzer relies on</h3>
+    <ul>
+      <li><code>Income/Expense</code> must literally be <code>Exp.</code> or <code>Income</code> — other values are skipped.</li>
+      <li><code>Amount</code> must be numeric (no currency symbol in the cell — the app exports a bare number).</li>
+      <li><code>Period</code> must be a real date cell, not a string. If it's a string, the row is skipped.</li>
+      <li>Special-case merchants are detected by regex on <code>Note</code>:
+        <ul>
+          <li><code>Shopee</code> at end → Shopee order</li>
+          <li><code>Lazada</code> at end → Lazada order</li>
+          <li><code>Amazon</code> at end → Amazon order</li>
+          <li><code>^711</code> → 7-Eleven</li>
+          <li><code>^Grab</code> (in Transportation) → GrabCar</li>
+        </ul>
+      </li>
+      <li>Coffee-shop detection matches a fixed list (Starbucks, Dunkin, Pickup Coffee, …) against <code>Note</code> on rows whose <code>Subcategory</code> is <code>Cafe Hopping</code>, <code>Grab</code>, or <code>Foodpanda</code>.</li>
+      <li>Tagged expenses: every <code>@Name</code> token in <code>Description</code> (e.g. <code>Lunch @Shane @Christian</code>, <code>Gift @Mom</code>) is aggregated into the Tagged Expenses section. Each mention adds the full row amount; duplicates in the same row are deduped case-insensitively.</li>
+    </ul>
+  </section>
+
+  <section class="help-section">
+    <h3>Exporting from the app</h3>
+    <p>In Money Manager: <em>Settings → Backup &amp; Restore → Export to Excel (xlsx)</em>. Pick the date range you want analyzed, then upload the resulting file here. No category renaming or column reshuffling needed — leave it as the app exports.</p>
+  </section>
+
+  <div class="help-actions">
+    <button type="button" class="btn btn-primary" data-help-close>Got it</button>
+  </div>
+</dialog>
+
+<script>
+  (function () {
+    const dlg = document.getElementById('help-dialog');
+    document.querySelectorAll('[data-help-open]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+      });
+    });
+    document.querySelectorAll('[data-help-close]').forEach(function (b) {
+      b.addEventListener('click', function () { if (dlg) dlg.close(); });
+    });
+    if (dlg) {
+      dlg.addEventListener('click', function (e) {
+        if (e.target === dlg) dlg.close();
+      });
+    }
+  })();
+</script>
+{% endblock %}

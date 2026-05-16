@@ -29,11 +29,11 @@ TOOLS: list[Tool] = [
         name="Analyze Money Manager",
         description=(
             "Visualise spending patterns from a Money Manager xlsx export — "
-            "top merchants, food/coffee/grocery breakdowns."
+            "monthly trend, category split, top merchants, food/coffee/grocery breakdowns."
         ),
         href="/tools/money-manager",
         protected=False,
-        available=False,
+        available=True,
     ),
     Tool(
         slug="weather",
